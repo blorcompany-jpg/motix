@@ -168,7 +168,8 @@ export interface ProgressResponse {
   muscles: Array<{ muscle: Muscle; sets: number }>;
   strength: Array<{ exercise: string; points: Array<{ day: string; bestLoadKg: number }> }>;
   weight: Array<{ day: string; weightKg: number }>;
-  hydration: { averageMl: number; daysOnTarget: number; days: Array<{ day: string; totalMl: number; goalMl: number }> };
+  /** Media e giorni a obiettivo contano dal primo giorno in cui l'utente ha registrato l'acqua. */
+  hydration: { averageMl: number; daysOnTarget: number; trackedDays: number; days: Array<{ day: string; totalMl: number; goalMl: number }> };
 }
 
 export interface SubscriptionResponse {

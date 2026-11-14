@@ -19,7 +19,7 @@ La specifica completa è nel documento «MOTIX – Progetto dell'app»; l'identi
 |---|---|
 | 1. Struttura del progetto e database | Fatta |
 | 2. Registrazione e ruoli | Fatta |
-| 3. App utente: piano, sedute, idratazione, prova di 14 giorni | Da fare |
+| 3. App utente: piano, sedute, idratazione, prova di 14 giorni | Fatta |
 | 4. Area personal trainer e dashboard delle palestre (funzioni complete) | Da fare |
 | 5. Community, shop e punti | Da fare |
 | 6. Sensore e motore AI | Da fare |
@@ -36,6 +36,15 @@ La specifica completa è nel documento «MOTIX – Progetto dell'app»; l'identi
 - **Personal trainer**: registrazione, approvazione, codice di invito, clienti (invito, richieste, chiusura),
   collegamento a più strutture.
 - **Pannello BTECH**: numeri principali, approvazione di strutture e personal trainer, ricerca utenti.
+- **Questionario e piano**: dal questionario (obiettivo, livello, giorni, attrezzi, limitazioni) nasce il piano della settimana,
+  con la spiegazione delle scelte. Il generatore è a regole (`apps/api/src/services/planner.ts`): esclude gli esercizi che
+  caricano le zone con limitazioni, usa solo gli attrezzi disponibili ed evita i carichi massimali tra 14 e 17 anni.
+- **Seduta**: serie, ripetizioni e carichi registrati a mano, timer di recupero, fatica percepita, riepilogo con confronto
+  con la volta precedente e con la settimana prima; la settimana dopo i carichi salgono dove le ripetizioni sono state completate.
+- **Idratazione**: obiettivo su peso e allenamento del giorno (Premium) o standard, registrazione per contenitore.
+- **Progressi**: sedute e volume per settimana, gruppi muscolari, forza, peso e misure, idratazione, diario.
+- **Prova e versione gratuita**: disdetta della prova dall'app; finita la prova restano diario, allenamenti liberi,
+  idratazione di base e progressi degli ultimi 7 giorni.
 - **Privacy**: struttura e personal trainer vedono i dati personali solo con il consenso dell'utente; registro delle azioni sensibili;
   cancellazione dell'account dall'app.
 
@@ -61,12 +70,17 @@ In sviluppo le email non partono: testo e link compaiono nel log del server.
 ## Verifiche
 
 ```bash
-npm test            # 36 test automatici dell'API
+npm test            # test automatici dell'API e del generatore del piano
 npm run typecheck   # controllo dei tipi su tutto il progetto
 ```
 
 ## Prima della produzione
 
+- **Libreria esercizi**: le 52 schede iniziali (`apps/api/src/data/exercises.ts`) sono state create con l'AI e vanno riviste
+  da BTECH, con i video, prima del lancio.
+- **Abbonamento dagli store**: oggi la prova è gestita dall'app e, senza acquisto, finisce nella versione gratuita. Va deciso
+  con Apple e Google se la prova diventa un'offerta introduttiva dello store (l'utente si abbona subito e paga dal 15° giorno).
+- **Promemoria** di allenamento, idratazione e prova: richiedono le notifiche push (tappa successiva).
 - Servizio di invio email con server in UE (oggi le email sono solo simulate): `apps/api/src/lib/mailer.ts`.
 - Database PostgreSQL gestito in una regione UE e `JWT_SECRET` casuale.
 - Accesso con Apple e Google (lo schema è già predisposto).

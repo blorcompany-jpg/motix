@@ -256,6 +256,10 @@ export async function wellbeingRoutes(app: FastifyInstance) {
         goalMl: goals.find((g) => g.day === d)?.goalMl ?? DEFAULT_HYDRATION_GOAL_ML,
       });
 
+    // La media parte dal primo giorno con una registrazione, per non penalizzare chi ha appena iniziato.
+    const firstLogged = waterDays.findIndex((d) => d.totalMl > 0);
+    const tracked = firstLogged >= 0 ? waterDays.slice(firstLogged) : [];
+
     return {
       days,
       limited: !premium,
@@ -265,8 +269,9 @@ export async function wellbeingRoutes(app: FastifyInstance) {
       strength,
       weight,
       hydration: {
-        averageMl: Math.round(waterDays.reduce((n, d) => n + d.totalMl, 0) / waterDays.length),
-        daysOnTarget: waterDays.filter((d) => d.totalMl >= d.goalMl).length,
+        averageMl: tracked.length ? Math.round(tracked.reduce((n, d) => n + d.totalMl, 0) / tracked.length) : 0,
+        daysOnTarget: tracked.filter((d) => d.totalMl >= d.goalMl).length,
+        trackedDays: tracked.length,
         days: waterDays,
       },
     };

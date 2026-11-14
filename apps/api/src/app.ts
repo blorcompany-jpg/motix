@@ -19,7 +19,12 @@ export async function buildApp(ctx: AppCtx, opts: { logger?: boolean; rateLimit?
   app.decorate('ctx', ctx);
 
   await app.register(helmet);
-  await app.register(cors, { origin: ctx.config.corsOrigins, credentials: true });
+  await app.register(cors, {
+    origin: ctx.config.corsOrigins,
+    credentials: true,
+    // Senza questo elenco il browser blocca PUT, PATCH e DELETE.
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
   if (opts.rateLimit !== false) await app.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute' });
 
   app.setErrorHandler((err: Error & { statusCode?: number; validation?: unknown }, req, reply) => {

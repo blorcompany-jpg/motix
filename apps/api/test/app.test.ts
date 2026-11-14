@@ -189,6 +189,9 @@ describe('idratazione, home e progressi', () => {
     expect(p.strength[0]).toMatchObject({ exercise: 'Panca piana con bilanciere', points: [{ day: '2026-11-14', bestLoadKg: 42.5 }, { day: D, bestLoadKg: 44.5 }] });
     expect(p.muscles[0]).toMatchObject({ muscle: 'chest', sets: 6 });
     expect(p.hydration.days.at(-1)).toMatchObject({ day: D, goalMl: 2950 });
+    // la media conta dal primo giorno registrato (oggi), non da 30 giorni fa
+    expect(p.hydration).toMatchObject({ trackedDays: 1, daysOnTarget: 0 });
+    expect(p.hydration.averageMl).toBe(p.hydration.days.at(-1).totalMl);
     // il nuovo peso aggiorna l'obiettivo di idratazione: 69,2 × 35 ≈ 2400
     expect((await get('/me/hydration?day=2026-11-22')).body.goalMl).toBe(2400);
   });

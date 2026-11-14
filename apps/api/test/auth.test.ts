@@ -125,6 +125,22 @@ describe('minorenni: 14–17 anni con consenso di un genitore', () => {
   });
 });
 
+describe('chiamate dal browser', () => {
+  it('consente PUT, PATCH e DELETE dalle origini autorizzate', async () => {
+    for (const method of ['PUT', 'PATCH', 'DELETE']) {
+      const res = await env.app.inject({
+        method: 'OPTIONS',
+        url: '/me/profile',
+        headers: { origin: 'http://localhost:8081', 'access-control-request-method': method, 'access-control-request-headers': 'authorization,content-type' },
+      });
+      expect(res.headers['access-control-allow-origin']).toBe('http://localhost:8081');
+      expect(String(res.headers['access-control-allow-methods'])).toContain(method);
+    }
+    const blocked = await env.app.inject({ method: 'OPTIONS', url: '/me', headers: { origin: 'https://sito-sconosciuto.example', 'access-control-request-method': 'GET' } });
+    expect(blocked.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
 describe('accesso e sessioni', () => {
   it('rifiuta credenziali sbagliate senza distinguere il motivo', async () => {
     const wrong = await env.api('POST', '/auth/login', { email: 'giulia@example.com', password: 'sbagliata-123' });

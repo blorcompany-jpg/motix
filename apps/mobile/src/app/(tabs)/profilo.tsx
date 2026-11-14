@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
-import { Redirect } from 'expo-router';
-import { PRICE_MONTHLY_EUR, ROLE_LABELS, TRIAL_DAYS } from '@motix/shared';
-import { Body, Button, Card, ErrorBox, Eyebrow, Field, H2, H3, Logo, Notice, Screen, Small } from '@/components/ui';
+import { Pressable, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { CONSENT_LABELS, ROLE_LABELS, type ConsentType } from '@motix/shared';
+import { Body, Button, Card, Checkbox, ErrorBox, Eyebrow, Field, H2, H3, Pill, Row, Screen, Small } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { colors, font } from '@/lib/theme';
@@ -14,17 +14,16 @@ interface TrainerLink {
   lastName: string;
 }
 
-/**
- * Prima schermata dopo l'accesso. In questa tappa mostra prova, struttura e personal trainer;
- * allenamento del giorno, idratazione e progressi arrivano con la tappa «app utente».
- */
-export default function Home() {
+const OPTIONAL_CONSENTS: ConsentType[] = ['share_structure', 'share_trainer', 'marketing'];
+
+export default function Profilo() {
   const { user, signOut, reload } = useAuth();
   const [links, setLinks] = useState<TrainerLink[]>([]);
   const [structureCode, setStructureCode] = useState('');
   const [trainerCode, setTrainerCode] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const isUser = user?.role === 'user';
 
   const loadLinks = useCallback(async () => {
@@ -40,7 +39,7 @@ export default function Home() {
     void loadLinks();
   }, [loadLinks]);
 
-  if (!user) return <Redirect href="/" />;
+  if (!user) return null;
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
@@ -56,36 +55,39 @@ export default function Home() {
     }
   };
 
-  const sub = user.subscription;
   const active = links.find((l) => l.status === 'active');
   const invites = links.filter((l) => l.status === 'requested_by_trainer');
   const requests = links.filter((l) => l.status === 'requested_by_user');
+  const sub = user.subscription;
 
   return (
-    <Screen footer={<Button title="Esci" variant="text" onPress={() => void signOut()} />}>
-      <Logo size={32} />
-      <View style={{ gap: 4, marginTop: 8 }}>
-        <Eyebrow>{isUser ? 'Benvenuto in MOTIX' : ROLE_LABELS[user.role]}</Eyebrow>
-        <H2>Ciao {user.firstName}</H2>
+    <Screen>
+      <View style={{ gap: 2 }}>
+        <Eyebrow>{ROLE_LABELS[user.role]}</Eyebrow>
+        <H2>{user.firstName} {user.lastName}</H2>
+        <Small style={{ color: colors.nebbia }}>{user.email}</Small>
       </View>
       <ErrorBox error={error} />
 
-      {!isUser && (
-        <Notice>
-          L’area per {ROLE_LABELS[user.role].toLowerCase()} è disponibile sul sito MOTIX. Nell’app arriverà con le prossime tappe.
-        </Notice>
+      {isUser && (
+        <Pressable onPress={() => router.push('/abbonamento')} accessibilityRole="button" accessibilityLabel="Gestisci l’abbonamento">
+          <Card>
+            <Row style={{ justifyContent: 'space-between' }}>
+              <H3>Abbonamento</H3>
+              <Pill tone={user.premium ? 'energia' : 'neutral'}>
+                {sub?.status === 'trial' ? `Prova · ${sub.trialDaysLeft} ${sub.trialDaysLeft === 1 ? 'giorno' : 'giorni'}` : user.premium ? 'Premium' : 'Gratuita'}
+              </Pill>
+            </Row>
+            <Small style={{ color: colors.acqua }}>Gestisci ›</Small>
+          </Card>
+        </Pressable>
       )}
 
-      {isUser && sub?.status === 'trial' && (
-        <Card style={{ borderColor: colors.acqua }}>
-          <Eyebrow>Prova gratuita</Eyebrow>
-          <Text style={{ fontFamily: font.displayHeavy, fontSize: 44, lineHeight: 48, color: colors.ghiaccio }}>
-            {sub.trialDaysLeft} <Text style={{ fontSize: 18, fontFamily: font.displaySemi, color: colors.nebbia }}>giorni rimasti su {TRIAL_DAYS}</Text>
-          </Text>
-          <Small style={{ color: colors.nebbia }}>
-            Hai tutte le funzioni Premium fino al {new Date(sub.trialEndsAt!).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}. Poi €
-            {PRICE_MONTHLY_EUR.toFixed(2).replace('.', ',')} al mese per 12 mesi, solo se attivi l’abbonamento.
-          </Small>
+      {isUser && (
+        <Card>
+          <H3>Il mio piano</H3>
+          <Small style={{ color: colors.nebbia }}>Obiettivo, livello, giorni, attrezzi e limitazioni da cui nasce il piano.</Small>
+          <Button title="Modifica il questionario" variant="text" inline onPress={() => router.push('/questionario')} />
         </Card>
       )}
 
@@ -125,10 +127,10 @@ export default function Home() {
           {invites.map((l) => (
             <View key={l.id} style={{ gap: 8 }}>
               <Body>{l.firstName} {l.lastName} vuole seguirti come personal trainer.</Body>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Row style={{ gap: 8 }}>
                 <View style={{ flex: 1 }}><Button title="Accetta" loading={busy === l.id} onPress={() => run(l.id, () => api('POST', `/me/trainer-links/${l.id}/accept`))} /></View>
                 <View style={{ flex: 1 }}><Button title="Rifiuta" variant="ghost" onPress={() => run(l.id, () => api('POST', `/me/trainer-links/${l.id}/decline`))} /></View>
-              </View>
+              </Row>
             </View>
           ))}
           {requests.map((l) => (
@@ -150,11 +152,40 @@ export default function Home() {
         </Card>
       )}
 
+      {isUser && (
+        <Card>
+          <H3>Privacy e consensi</H3>
+          <Small style={{ color: colors.nebbia }}>Struttura e personal trainer vedono i tuoi dati solo se lo consenti qui. Puoi cambiare idea quando vuoi.</Small>
+          {OPTIONAL_CONSENTS.map((type) => (
+            <Checkbox key={type} checked={user.consents[type]} onChange={(v) => run(type, () => api('PATCH', '/me/consents', { [type]: v }))}>
+              {CONSENT_LABELS[type]}
+            </Checkbox>
+          ))}
+          <Checkbox
+            checked={user.profileVisibility === 'public'}
+            onChange={(v) => run('visibility', () => api('PATCH', '/me', { profileVisibility: v ? 'public' : 'private' }))}
+          >
+            Profilo visibile nella community
+          </Checkbox>
+        </Card>
+      )}
+
       {isUser && user.referralCode && (
         <Card>
           <H3>Invita un amico</H3>
           <Small style={{ color: colors.nebbia }}>Un mese gratis per ogni amico che si abbona con il tuo codice.</Small>
-          <Text style={{ fontFamily: font.display, fontSize: 24, letterSpacing: 2, color: colors.energia }}>{user.referralCode}</Text>
+          <Text selectable style={{ fontFamily: font.display, fontSize: 24, letterSpacing: 2, color: colors.energia }}>{user.referralCode}</Text>
+        </Card>
+      )}
+
+      <Button title="Esci" variant="ghost" onPress={() => void signOut()} />
+      {!deleting ? (
+        <Button title="Cancella il mio account" variant="text" onPress={() => setDeleting(true)} />
+      ) : (
+        <Card style={{ borderColor: colors.corallo }}>
+          <Body style={{ fontSize: 14 }}>Cancelliamo l’account e tutti i tuoi dati: allenamenti, misure, idratazione e collegamenti. Non si può annullare.</Body>
+          <Button title="Sì, cancella tutto" variant="ghost" loading={busy === 'delete'} onPress={() => run('delete', async () => { await api('DELETE', '/me'); await signOut(); })} />
+          <Button title="Annulla" variant="text" onPress={() => setDeleting(false)} />
         </Card>
       )}
     </Screen>

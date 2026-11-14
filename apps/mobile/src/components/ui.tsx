@@ -9,6 +9,7 @@ import {
   Text,
   TextInput,
   View,
+  type ColorValue,
   type TextInputProps,
   type TextProps,
   type ViewProps,
@@ -231,4 +232,160 @@ const s = StyleSheet.create({
   alertError: { backgroundColor: 'rgba(255,122,89,0.12)', borderColor: 'rgba(255,122,89,0.5)' },
   alertInfo: { backgroundColor: 'rgba(56,211,238,0.10)', borderColor: 'rgba(56,211,238,0.4)' },
   alertOk: { backgroundColor: 'rgba(181,232,83,0.10)', borderColor: 'rgba(181,232,83,0.45)' },
+});
+
+/* ---------- Scelte ---------- */
+
+export function Chip({ label, selected, onPress, hint }: { label: string; selected: boolean; onPress: () => void; hint?: string }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={label}
+      style={[x.chip, selected && x.chipOn, hint ? x.chipWide : null]}
+    >
+      <Text style={[x.chipText, selected && { color: colors.notte }]}>{label}</Text>
+      {hint && <Text style={[x.chipHint, selected && { color: colors.ardesia }]}>{hint}</Text>}
+    </Pressable>
+  );
+}
+
+export const ChipRow = ({ children }: { children: ReactNode }) => <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{children}</View>;
+
+export function Pill({ children, tone = 'acqua' }: { children: ReactNode; tone?: 'acqua' | 'energia' | 'neutral' | 'corallo' }) {
+  const c = tone === 'acqua' ? colors.acqua : tone === 'energia' ? colors.energia : tone === 'corallo' ? colors.corallo : colors.nebbia;
+  return (
+    <View style={{ alignSelf: 'flex-start', borderRadius: radii.pill, borderWidth: 1, borderColor: c, paddingHorizontal: 10, paddingVertical: 3 }}>
+      <Text style={{ fontFamily: font.textSemi, fontSize: 12, color: c }}>{children}</Text>
+    </View>
+  );
+}
+
+export function Row({ children, style }: { children: ReactNode; style?: ViewProps['style'] }) {
+  return <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 12 }, style]}>{children}</View>;
+}
+
+/** Intestazione delle schermate interne, con il tasto per tornare indietro. */
+export function TopBar({ title, onBack }: { title: string; onBack: () => void }) {
+  return (
+    <Row>
+      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Indietro" hitSlop={12} style={x.back}>
+        <Svg width={20} height={20} viewBox="0 0 24 24">
+          <Path d="M15 5l-7 7 7 7" stroke={colors.ghiaccio} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </Svg>
+      </Pressable>
+      <Text style={[s.h3, { flex: 1 }]} numberOfLines={1}>{title}</Text>
+    </Row>
+  );
+}
+
+/* ---------- Grafici ---------- */
+
+export function Ring({ value, goal, size = 120, stroke = 12, children }: { value: number; goal: number; size?: number; stroke?: number; children?: ReactNode }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = goal > 0 ? Math.min(1, value / goal) : 0;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel={`${Math.round(pct * 100)} per cento dell’obiettivo`}>
+      <Svg width={size} height={size} style={{ position: 'absolute' }}>
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={colors.blu} strokeWidth={stroke} fill="none" />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke={pct >= 1 ? colors.energia : colors.acqua}
+          strokeWidth={stroke}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${c * pct} ${c}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </Svg>
+      {children}
+    </View>
+  );
+}
+
+/** Colonne verticali; la colonna evidenziata usa il colore Acqua. */
+export function Bars({ data, height = 96, highlightLast = true, goal }: { data: Array<{ label: string; value: number; goal?: number }>; height?: number; highlightLast?: boolean; goal?: boolean }) {
+  const max = Math.max(1, ...data.map((d) => Math.max(d.value, goal ? (d.goal ?? 0) : 0)));
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: height + 20 }}>
+      {data.map((d, i) => {
+        const on = goal ? d.value >= (d.goal ?? Infinity) : highlightLast && i === data.length - 1;
+        return (
+          <View key={i} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+            <View style={{ height, width: '100%', justifyContent: 'flex-end' }}>
+              <View
+                style={{
+                  height: Math.max(d.value > 0 ? 4 : 2, (d.value / max) * height),
+                  borderRadius: 6,
+                  backgroundColor: d.value === 0 ? colors.blu : on ? (goal ? colors.energia : colors.acqua) : goal ? colors.acqua : colors.blu,
+                }}
+              />
+            </View>
+            <Text style={{ fontFamily: font.text, fontSize: 11, color: colors.pietra }}>{d.label}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+export function HBar({ label, value, max, suffix }: { label: string; value: number; max: number; suffix: string }) {
+  return (
+    <View style={{ gap: 4 }}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Text style={{ fontFamily: font.textMedium, fontSize: 14, color: colors.ghiaccio }}>{label}</Text>
+        <Text style={{ fontFamily: font.text, fontSize: 13, color: colors.nebbia }}>{value} {suffix}</Text>
+      </Row>
+      <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.blu }}>
+        <View style={{ height: 8, borderRadius: 4, width: `${Math.max(4, (value / Math.max(1, max)) * 100)}%`, backgroundColor: colors.acqua }} />
+      </View>
+    </View>
+  );
+}
+
+export function Stat({ value, label }: { value: ReactNode; label: string }) {
+  return (
+    <View style={[s.card, { flex: 1, gap: 2, padding: 14 }]}>
+      <Text style={{ fontFamily: font.display, fontSize: 24, color: colors.ghiaccio }}>{value}</Text>
+      <Text style={{ fontFamily: font.text, fontSize: 12, color: colors.nebbia }}>{label}</Text>
+    </View>
+  );
+}
+
+/* ---------- Icone della barra in basso ---------- */
+
+const ICONS = {
+  home: 'M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z',
+  piano: 'M3 12h2m14 0h2M6 7v10M18 7v10M9 9.5v5m6-5v5M9 12h6',
+  progressi: 'M4 20V10m6 10V4m6 16v-7m4 7H3',
+  profilo: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7.5 9a7.5 7.5 0 0 1 15 0',
+} as const;
+
+export function TabIcon({ name, color, size = 24 }: { name: keyof typeof ICONS; color: ColorValue; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d={ICONS[name]} stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
+
+export function Loading() {
+  return (
+    <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+      <ActivityIndicator color={colors.acqua} />
+    </View>
+  );
+}
+
+const x = StyleSheet.create({
+  chip: { borderRadius: radii.pill, borderWidth: 1, borderColor: colors.blu, backgroundColor: colors.ardesia, paddingHorizontal: 16, minHeight: 44, justifyContent: 'center' },
+  chipWide: { borderRadius: radii.md, width: '100%', paddingVertical: 12, gap: 2 },
+  chipOn: { backgroundColor: colors.acqua, borderColor: colors.acqua },
+  chipText: { fontFamily: font.textSemi, fontSize: 15, color: colors.ghiaccio },
+  chipHint: { fontFamily: font.text, fontSize: 13, color: colors.nebbia },
+  back: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.ardesia, alignItems: 'center', justifyContent: 'center' },
 });
