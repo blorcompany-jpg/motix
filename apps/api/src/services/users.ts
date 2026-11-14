@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   CONSENT_TYPES,
   TRIAL_DAYS,
@@ -13,6 +13,7 @@ import {
   emailTokens,
   instructors,
   refreshTokens,
+  sportProfiles,
   structures,
   subscriptions,
   trainers,
@@ -22,6 +23,7 @@ import {
 import { notFound } from '../lib/errors';
 import { hashToken, newCode, newOpaqueToken, signAccessToken } from '../lib/tokens';
 import { track } from './events';
+import { currentSubscription, describeSubscription } from './subscription';
 
 const DAY_MS = 86_400_000;
 
@@ -86,25 +88,17 @@ export async function buildMe(ctx: AppCtx, userId: string): Promise<MeResponse> 
   }
 
   let subscription: MeResponse['subscription'] = null;
+  let premium = false;
+  let hasProfile = false;
   if (u.role === 'user') {
-    const [sub] = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, u.id))
-      .orderBy(desc(subscriptions.createdAt))
-      .limit(1);
+    const sub = await currentSubscription(ctx, u.id);
     if (sub) {
-      const left =
-        sub.status === 'trial' && sub.trialEndsAt
-          ? Math.max(0, Math.ceil((sub.trialEndsAt.getTime() - ctx.now().getTime()) / DAY_MS))
-          : null;
-      subscription = {
-        status: sub.status,
-        trialEndsAt: sub.trialEndsAt?.toISOString() ?? null,
-        trialDaysLeft: left,
-        firstChargeAt: sub.firstChargeAt?.toISOString() ?? null,
-      };
+      const d = describeSubscription(ctx, sub);
+      premium = d.premium;
+      subscription = { status: d.status, trialEndsAt: d.trialEndsAt, trialDaysLeft: d.trialDaysLeft, firstChargeAt: d.firstChargeAt };
     }
+    const [profile] = await db.select({ goal: sportProfiles.goal }).from(sportProfiles).where(eq(sportProfiles.userId, u.id)).limit(1);
+    hasProfile = Boolean(profile?.goal);
   }
 
   let trainer: MeResponse['trainer'] = null;
@@ -146,6 +140,8 @@ export async function buildMe(ctx: AppCtx, userId: string): Promise<MeResponse> 
     trainer,
     ownedStructure,
     instructorOf,
+    premium,
+    hasProfile,
   };
 }
 

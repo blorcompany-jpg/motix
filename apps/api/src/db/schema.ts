@@ -342,6 +342,12 @@ export const exercises = pgTable(
     muscles: jsonb('muscles').$type<string[]>().notNull().default([]),
     equipment: jsonb('equipment').$type<string[]>().notNull().default([]),
     level: levelEnum('level').notNull().default('beginner'),
+    /** Schema di movimento usato dal generatore del piano (squat, hinge, push_h…). */
+    pattern: text('pattern').notNull().default('other'),
+    /** false per gli esercizi a corpo libero o a tempo, dove il carico non si registra. */
+    loadable: boolean('loadable').notNull().default(true),
+    /** Come si conta: ripetizioni, secondi di tenuta o minuti. */
+    unit: text('unit').notNull().default('reps'),
     contraindications: jsonb('contraindications').$type<string[]>().notNull().default([]),
     source: exerciseSourceEnum('source').notNull().default('ai'),
     reviewStatus: reviewStatusEnum('review_status').notNull().default('draft'),
@@ -449,7 +455,7 @@ export const setLogs = pgTable(
     source: setSourceEnum('source').notNull().default('manual'),
     recordedAt: ts('recorded_at').notNull().defaultNow(),
   },
-  (t) => [index('set_logs_session_exercise_idx').on(t.sessionExerciseId)],
+  (t) => [uniqueIndex('set_logs_set_uq').on(t.sessionExerciseId, t.setNumber)],
 );
 
 /** Dati del sensore per una serie: velocità, regolarità, tempo sotto tensione. */
@@ -477,10 +483,12 @@ export const hydrationLogs = pgTable(
     id: id(),
     userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     loggedAt: ts('logged_at').notNull().defaultNow(),
+    /** Giorno locale dell'utente, per i totali giornalieri. */
+    day: date('day').notNull(),
     container: containerEnum('container').notNull(),
     amountMl: integer('amount_ml').notNull(),
   },
-  (t) => [index('hydration_logs_user_idx').on(t.userId, t.loggedAt)],
+  (t) => [index('hydration_logs_user_idx').on(t.userId, t.day)],
 );
 
 export const hydrationGoals = pgTable(

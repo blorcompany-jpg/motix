@@ -5,6 +5,7 @@ import { openDb, type DbHandle } from '../src/db/client';
 import { users } from '../src/db/schema';
 import { DevMailer } from '../src/lib/mailer';
 import { hashPassword } from '../src/lib/password';
+import { ensureExerciseLibrary } from '../src/services/library';
 
 export interface TestEnv {
   app: FastifyInstance;
@@ -21,6 +22,7 @@ export const PASSWORD = 'Password-di-prova-1';
 export async function createEnv(): Promise<TestEnv> {
   const handle = await openDb('pglite:memory');
   await handle.migrate();
+  await ensureExerciseLibrary(handle.db);
   const mailer = new DevMailer();
   const clock = { now: new Date('2026-11-14T10:00:00Z') };
   const config = loadConfig({ NODE_ENV: 'test', JWT_SECRET: 'x'.repeat(40), PUBLIC_WEB_URL: 'https://motix.test' });

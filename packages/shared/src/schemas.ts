@@ -109,3 +109,51 @@ export const acceptStaffInviteSchema = z.object({
 export const inviteClientSchema = z.object({ email });
 
 export const decisionSchema = z.object({ reason: z.string().trim().max(400).optional() });
+
+/* ---------- App utente ---------- */
+import { CONTAINERS, EQUIPMENT, GOALS, LEVELS, LIMITATIONS, SEXES } from './constants';
+
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data non valida');
+
+export const sportProfileSchema = z.object({
+  sex: z.enum(SEXES),
+  weightKg: z.number().min(30, 'Peso non valido').max(250, 'Peso non valido'),
+  heightCm: z.number().int().min(120, 'Altezza non valida').max(230, 'Altezza non valida'),
+  goal: z.enum(GOALS),
+  level: z.enum(LEVELS),
+  daysPerWeek: z.number().int().min(1).max(6),
+  equipment: z.array(z.enum(EQUIPMENT)).max(EQUIPMENT.length),
+  limitations: z.array(z.enum(LIMITATIONS)).max(LIMITATIONS.length),
+});
+export type SportProfileInput = z.infer<typeof sportProfileSchema>;
+
+export const daySchema = z.object({ day });
+
+export const logSetSchema = z.object({
+  sessionExerciseId: z.string().uuid(),
+  setNumber: z.number().int().min(1).max(20),
+  reps: z.number().int().min(0).max(200),
+  loadKg: z.number().min(0).max(500).nullable().optional(),
+});
+
+export const completeSessionSchema = z.object({
+  perceivedEffort: z.number().int().min(1).max(10),
+  notes: z.string().trim().max(500).optional(),
+});
+
+export const freeSessionSchema = z.object({
+  day,
+  title: z.string().trim().min(1).max(60).optional(),
+  exerciseIds: z.array(z.string().uuid()).min(1).max(12),
+});
+
+export const hydrationLogSchema = z.object({
+  day,
+  container: z.enum(CONTAINERS),
+});
+
+export const measurementSchema = z.object({
+  day,
+  weightKg: z.number().min(30).max(250).optional(),
+  circumferences: z.record(z.string().max(20), z.number().min(10).max(250)).optional(),
+});

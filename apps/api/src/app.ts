@@ -11,6 +11,8 @@ import { meRoutes } from './modules/me';
 import { publicRoutes } from './modules/public';
 import { structureRoutes } from './modules/structure';
 import { trainerRoutes } from './modules/trainer';
+import { trainingRoutes } from './modules/training';
+import { wellbeingRoutes } from './modules/wellbeing';
 
 export async function buildApp(ctx: AppCtx, opts: { logger?: boolean; rateLimit?: boolean } = {}) {
   const app = Fastify({ logger: opts.logger ?? false, trustProxy: true });
@@ -38,6 +40,8 @@ export async function buildApp(ctx: AppCtx, opts: { logger?: boolean; rateLimit?
   await app.register(publicRoutes);
   await app.register(authRoutes);
   await app.register(meRoutes);
+  await app.register(trainingRoutes);
+  await app.register(wellbeingRoutes);
   await app.register(trainerRoutes);
   await app.register(structureRoutes);
   await app.register(adminRoutes);
