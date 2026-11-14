@@ -15,6 +15,7 @@ export default function Home() {
   const isUser = user?.role === 'user';
   const day = today();
   const home = useApi<HomeResponse>(isUser ? `/me/home?day=${day}` : null);
+  const unread = useApi<{ unread: number }>(isUser ? '/conversations/unread' : null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   if (!user) return null;
@@ -59,10 +60,25 @@ export default function Home() {
           </Pressable>
         )}
       </Row>
-      <View style={{ gap: 2 }}>
-        <Small>{new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}</Small>
-        <H2>Ciao {user.firstName}</H2>
-      </View>
+      <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <View style={{ gap: 2, flex: 1 }}>
+          <Small>{new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}</Small>
+          <H2>Ciao {user.firstName}</H2>
+        </View>
+        <Pressable
+          onPress={() => router.push('/messaggi')}
+          accessibilityRole="button"
+          accessibilityLabel={unread.data?.unread ? `Messaggi: ${unread.data.unread} da leggere` : 'Messaggi'}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: radii.pill, borderWidth: 1, borderColor: unread.data?.unread ? colors.acqua : colors.blu }}
+        >
+          <Text style={{ fontFamily: font.textSemi, fontSize: 14, color: colors.ghiaccio }}>Messaggi</Text>
+          {Boolean(unread.data?.unread) && (
+            <View style={{ minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.acqua, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
+              <Text style={{ fontFamily: font.textSemi, fontSize: 12, color: colors.notte }}>{unread.data!.unread}</Text>
+            </View>
+          )}
+        </Pressable>
+      </Row>
       <ErrorBox error={error ?? home.error} />
       {!h && home.loading && <Loading />}
 

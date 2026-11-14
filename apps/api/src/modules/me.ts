@@ -77,6 +77,7 @@ export async function meRoutes(app: FastifyInstance) {
         dataConsent: clientLinks.dataConsent,
         startedAt: clientLinks.startedAt,
         trainerId: trainers.id,
+        trainerUserId: trainers.userId,
         firstName: users.firstName,
         lastName: users.lastName,
         specializations: trainers.specializations,

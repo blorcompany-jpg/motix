@@ -10,6 +10,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
+import { Poster } from './pages/Poster';
 import { RegisterStructure } from './pages/RegisterStructure';
 import { RegisterTrainer } from './pages/RegisterTrainer';
 import { ForgotPassword, JoinLanding, ParentalConsent, ResetPassword, StaffInvite, VerifyEmail } from './pages/TokenPages';
@@ -44,6 +45,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/password-dimenticata" element={<ForgotPassword />} />
           <Route path="/nuova-password" element={<ResetPassword />} />
           <Route path="/app" element={<Private><Dashboard /></Private>} />
+          <Route path="/locandina" element={<Private><Poster /></Private>} />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Routes>
       </AuthProvider>

@@ -86,3 +86,16 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
     throw e;
   }
 }
+
+/** Scarica un file protetto (es. il report in CSV) e lo salva con il nome indicato. */
+export async function download(path: string, filename: string) {
+  const s = session.get();
+  const res = await fetch(BASE + path, { headers: s ? { authorization: `Bearer ${s.accessToken}` } : {} });
+  if (!res.ok) throw new ApiFailure(res.status, 'download', 'Download non riuscito: riprova');
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

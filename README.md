@@ -20,7 +20,7 @@ La specifica completa è nel documento «MOTIX – Progetto dell'app»; l'identi
 | 1. Struttura del progetto e database | Fatta |
 | 2. Registrazione e ruoli | Fatta |
 | 3. App utente: piano, sedute, idratazione, prova di 14 giorni | Fatta |
-| 4. Area personal trainer e dashboard delle palestre (funzioni complete) | Da fare |
+| 4. Area personal trainer e dashboard delle palestre (funzioni complete) | Fatta |
 | 5. Community, shop e punti | Da fare |
 | 6. Sensore e motore AI | Da fare |
 
@@ -45,6 +45,12 @@ La specifica completa è nel documento «MOTIX – Progetto dell'app»; l'identi
 - **Progressi**: sedute e volume per settimana, gruppi muscolari, forza, peso e misure, idratazione, diario.
 - **Prova e versione gratuita**: disdetta della prova dall'app; finita la prova restano diario, allenamenti liberi,
   idratazione di base e progressi degli ultimi 7 giorni.
+- **Personal trainer** (sito): report del cliente, editor del piano con proposta automatica da modificare, messaggi.
+- **Struttura** (sito): panoramica, iscritti con rischio abbandono, alert con motivo e azione suggerita, scheda dell'iscritto
+  con note, messaggi singoli e di gruppo, attività dei personal trainer, report mensile esportabile in CSV, locandina con QR.
+- **Rischio abbandono**: punteggio a regole (`apps/api/src/services/risk.ts`) su giorni dall'ultima seduta, calo di frequenza,
+  sedute saltate e ultimo accesso.
+- **Messaggi**: chat tra personal trainer e cliente e tra struttura e iscritto, anche nell'app; per chi si allena rispondere è Premium.
 - **Privacy**: struttura e personal trainer vedono i dati personali solo con il consenso dell'utente; registro delle azioni sensibili;
   cancellazione dell'account dall'app.
 

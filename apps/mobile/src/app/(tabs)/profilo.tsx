@@ -9,6 +9,7 @@ import { colors, font } from '@/lib/theme';
 
 interface TrainerLink {
   id: string;
+  trainerUserId: string;
   status: 'active' | 'requested_by_user' | 'requested_by_trainer';
   firstName: string;
   lastName: string;
@@ -121,6 +122,17 @@ export default function Profilo() {
           {active && (
             <>
               <Body style={{ color: colors.ghiaccio }}>{active.firstName} {active.lastName}</Body>
+              <Button
+                title="Scrivi al personal trainer"
+                variant="ghost"
+                loading={busy === 'chat'}
+                onPress={() =>
+                  run('chat', async () => {
+                    const c = await api<{ id: string }>('POST', '/conversations', { userId: active.trainerUserId });
+                    router.push(`/messaggi/${c.id}`);
+                  })
+                }
+              />
               <Button title="Chiudi il collegamento" variant="text" inline loading={busy === active.id} onPress={() => run(active.id, () => api('POST', `/me/trainer-links/${active.id}/close`))} />
             </>
           )}

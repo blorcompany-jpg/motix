@@ -113,3 +113,36 @@ td { padding: 12px 10px; border-top: 1px solid var(--blu); vertical-align: middl
 .qr svg { display: block; width: 100%; height: 100%; }
 .center-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .center-page .card { width: 100%; max-width: 520px; }
+
+/* Tappa 4: rischio, grafici, messaggi, editor del piano */
+.badge.risk-low { background: rgba(181, 232, 83, 0.15); color: var(--energia); }
+.badge.risk-medium { background: rgba(255, 196, 87, 0.15); color: #ffd58a; }
+.badge.risk-high { background: rgba(255, 122, 89, 0.18); color: var(--corallo); }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: rgba(56, 211, 238, 0.06); }
+.bars { display: flex; gap: 10px; align-items: flex-end; height: 130px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; font-size: 12px; color: var(--pietra); }
+.bar-track { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+.bar { width: 100%; min-height: 3px; border-radius: 6px; background: var(--acqua); }
+.split { display: grid; grid-template-columns: 300px 1fr; gap: 12px; align-items: start; }
+@media (max-width: 820px) { .split { grid-template-columns: 1fr; } }
+.conv { display: flex; flex-direction: column; gap: 2px; text-align: left; width: 100%; background: none; border: 0; border-radius: var(--r-sm); padding: 10px 12px; color: var(--ghiaccio); }
+.conv:hover, .conv.on { background: var(--notte); }
+.conv .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat { display: flex; flex-direction: column; gap: 12px; min-height: 420px; }
+.thread { flex: 1; display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; padding-right: 4px; }
+.bubble { align-self: flex-start; max-width: 78%; background: var(--notte); border: 1px solid var(--blu); border-radius: 16px 16px 16px 4px; padding: 10px 14px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble.mine { align-self: flex-end; background: rgba(56, 211, 238, 0.14); border-color: rgba(56, 211, 238, 0.4); border-radius: 16px 16px 4px 16px; }
+.bubble span { display: block; margin-top: 4px; font-size: 11px; color: var(--pietra); }
+.in-sm { width: 76px; padding: 8px 10px; text-align: center; }
+.ex-row { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(4, auto) auto; gap: 8px; align-items: end; }
+.ex-row label { font-size: 11px; color: var(--pietra); display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 820px) { .ex-row { grid-template-columns: 1fr 1fr 1fr; } }
+textarea { resize: vertical; min-height: 84px; }
+
+/* Locandina da stampare */
+.poster-page { min-height: 100vh; background: #fff; color: #0b1220; display: flex; flex-direction: column; align-items: center; padding: 32px 16px; gap: 16px; }
+.poster { width: 100%; max-width: 620px; background: #0b1220; color: #eef3fa; border-radius: 28px; padding: 48px 44px; display: flex; flex-direction: column; gap: 22px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.poster h1 { font-size: 56px; font-weight: 800; }
+.poster .qr { width: 240px; height: 240px; }
+@media print { .no-print { display: none !important; } .poster-page { padding: 0; } .poster { border-radius: 0; max-width: none; min-height: 100vh; } }

@@ -39,6 +39,7 @@ export default function Piano() {
       <View style={{ gap: 2 }}>
         <Eyebrow>{p ? `Settimana dal ${shortDate(p.weekStart)}` : 'Piano di allenamento'}</Eyebrow>
         <H2>Il tuo piano</H2>
+        {p?.author === 'trainer' && <Small style={{ color: colors.energia }}>Creato da {p.trainerName ?? 'il tuo personal trainer'}</Small>}
       </View>
       <ErrorBox error={error ?? plan.error} />
       {!plan.data && plan.loading && <Loading />}
@@ -78,11 +79,11 @@ export default function Piano() {
         );
       })}
 
-      {p && (
+      {p && p.rationale.length > 0 && (
         <Card>
           <Pressable onPress={() => setWhy(!why)} accessibilityRole="button" accessibilityState={{ expanded: why }}>
             <Row style={{ justifyContent: 'space-between' }}>
-              <H3>Perché questo piano</H3>
+              <H3>{p.author === 'trainer' ? 'Nota del tuo personal trainer' : 'Perché questo piano'}</H3>
               <Text style={{ fontFamily: font.display, fontSize: 20, color: colors.acqua }}>{why ? '−' : '+'}</Text>
             </Row>
           </Pressable>
@@ -90,7 +91,7 @@ export default function Piano() {
         </Card>
       )}
 
-      {p && premium && !confirm && <Button title="Genera un nuovo piano" variant="ghost" onPress={() => (open > 0 ? setConfirm(true) : generate())} loading={busy} />}
+      {p && premium && !confirm && <Button title={p.author === 'trainer' ? 'Sostituisci con un piano automatico' : 'Genera un nuovo piano'} variant="ghost" onPress={() => (open > 0 ? setConfirm(true) : generate())} loading={busy} />}
       {confirm && (
         <Card style={{ borderColor: colors.corallo }}>
           <Body style={{ fontSize: 14 }}>
