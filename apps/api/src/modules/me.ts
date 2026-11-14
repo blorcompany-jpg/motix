@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { REQUIRED_CONSENTS, codeSchema, updateConsentsSchema } from '@motix/shared';
 import { requireAuth, requireRole } from '../auth';
-import { clientLinks, refreshTokens, structures, trainers, users } from '../db/schema';
+import { clientLinks, mediaFiles, refreshTokens, structures, trainers, users } from '../db/schema';
 import { badRequest, conflict, notFound, parse } from '../lib/errors';
 import { audit, track } from '../services/events';
 import { buildMe, getConsents, setConsents } from '../services/users';
@@ -206,6 +206,9 @@ export async function meRoutes(app: FastifyInstance) {
     }
     if (auth.role === 'admin') throw conflict('admin_account', 'Un account amministratore si rimuove dal pannello BTECH');
     await db.update(refreshTokens).set({ revokedAt: ctx.now() }).where(and(eq(refreshTokens.userId, auth.userId), isNull(refreshTokens.revokedAt)));
+    // Anche foto e video caricati vengono cancellati dall'archivio.
+    const files = await db.select({ key: mediaFiles.key }).from(mediaFiles).where(eq(mediaFiles.ownerId, auth.userId));
+    for (const f of files) await ctx.storage.remove(f.key);
     await db.delete(users).where(eq(users.id, auth.userId));
     await audit(db, 'user.deleted', { entity: 'user', entityId: auth.userId, ip: req.ip });
     return { ok: true };

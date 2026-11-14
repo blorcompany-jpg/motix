@@ -5,7 +5,8 @@ import { openDb, type DbHandle } from '../src/db/client';
 import { users } from '../src/db/schema';
 import { DevMailer } from '../src/lib/mailer';
 import { hashPassword } from '../src/lib/password';
-import { ensureExerciseLibrary } from '../src/services/library';
+import { MemoryStorage } from '../src/lib/storage';
+import { ensureExerciseLibrary, ensureShopCatalog } from '../src/services/library';
 
 export interface TestEnv {
   app: FastifyInstance;
@@ -23,10 +24,11 @@ export async function createEnv(): Promise<TestEnv> {
   const handle = await openDb('pglite:memory');
   await handle.migrate();
   await ensureExerciseLibrary(handle.db);
+  await ensureShopCatalog(handle.db);
   const mailer = new DevMailer();
   const clock = { now: new Date('2026-11-14T10:00:00Z') };
   const config = loadConfig({ NODE_ENV: 'test', JWT_SECRET: 'x'.repeat(40), PUBLIC_WEB_URL: 'https://motix.test' });
-  const app = await buildApp({ db: handle.db, config, mailer, now: () => clock.now }, { rateLimit: false });
+  const app = await buildApp({ db: handle.db, config, mailer, storage: new MemoryStorage(), now: () => clock.now }, { rateLimit: false });
 
   const api: TestEnv['api'] = async (method, url, body, token) => {
     const res = await app.inject({

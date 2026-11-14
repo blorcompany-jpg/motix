@@ -5,6 +5,10 @@ export interface Config {
   accessTokenTtlMin: number;
   refreshTokenTtlDays: number;
   publicWebUrl: string;
+  /** Indirizzo pubblico di questo server, usato nei link ai file caricati. */
+  publicApiUrl: string;
+  /** Cartella dei file caricati (solo con l'archivio su disco). */
+  mediaDir: string;
   corsOrigins: string[];
   mailFrom: string;
   isProduction: boolean;
@@ -22,6 +26,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     accessTokenTtlMin: Number(env.ACCESS_TOKEN_TTL_MIN ?? 15),
     refreshTokenTtlDays: Number(env.REFRESH_TOKEN_TTL_DAYS ?? 30),
     publicWebUrl: (env.PUBLIC_WEB_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
+    publicApiUrl: (env.PUBLIC_API_URL ?? `http://localhost:${Number(env.PORT ?? 4000)}`).replace(/\/$/, ''),
+    mediaDir: env.MEDIA_DIR ?? './.data/media',
     corsOrigins: (env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:8081').split(',').map((s) => s.trim()),
     mailFrom: env.MAIL_FROM ?? 'MOTIX <no-reply@motix.app>',
     isProduction,

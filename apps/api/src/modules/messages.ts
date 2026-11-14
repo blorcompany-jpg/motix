@@ -1,10 +1,10 @@
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, or } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { messageSchema, type ChatMessage, type ConversationSummary, type Role } from '@motix/shared';
 import { requireAuth } from '../auth';
 import type { AuthCtx } from '../context';
-import { clientLinks, conversationParticipants, instructors, messages, structures, trainers, userConsents, users } from '../db/schema';
+import { clientLinks, conversationParticipants, instructors, messages, structures, trainers, userBlocks, userConsents, users } from '../db/schema';
 import { forbidden, notFound, parse } from '../lib/errors';
 import { track } from '../services/events';
 import { ensureConversation, postMessage } from '../services/messaging';
@@ -52,6 +52,17 @@ export async function messageRoutes(app: FastifyInstance) {
       if (!link) return null;
       const hide = viewer.role === 'personal_trainer' && !link.consent;
       return { name: `${other.firstName} ${hide ? `${other.lastName.charAt(0)}.` : other.lastName}`, role: other.role };
+    }
+    // Chat tra iscritti: solo verso chi ha il profilo pubblico e se nessuno dei due ha bloccato l'altro.
+    if (viewer.role === 'user' && other.role === 'user') {
+      const [block] = await db
+        .select()
+        .from(userBlocks)
+        .where(or(and(eq(userBlocks.blockerId, viewer.id), eq(userBlocks.blockedId, otherId)), and(eq(userBlocks.blockerId, otherId), eq(userBlocks.blockedId, viewer.id))))
+        .limit(1);
+      const [me] = await db.select({ v: users.profileVisibility }).from(users).where(eq(users.id, viewer.id)).limit(1);
+      if (block || other.profileVisibility !== 'public' || me?.v !== 'public') return null;
+      return { name: `${other.firstName} ${other.lastName}`, role: other.role };
     }
     const viewerStructure = await staffStructure(viewer.id, viewer.role);
     if (viewerStructure && other.role === 'user' && other.structureId === viewerStructure.id) {
@@ -112,7 +123,7 @@ export async function messageRoutes(app: FastifyInstance) {
     const auth = requireAuth(req);
     const { userId } = parse(z.object({ userId: z.string().uuid() }), req.body);
     const rel = await relation({ id: auth.userId, role: auth.role }, userId);
-    if (!rel) throw forbidden('Puoi scrivere solo al tuo personal trainer, ai tuoi clienti o agli iscritti della tua struttura');
+    if (!rel) throw forbidden('Puoi scrivere al tuo personal trainer, ai tuoi clienti, agli iscritti della tua struttura o a chi ha il profilo pubblico come te');
     const id = await ensureConversation(db, auth.userId, userId);
     return reply.code(201).send({ id, with: { id: userId, name: rel.name, role: rel.role } });
   });

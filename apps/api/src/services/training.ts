@@ -11,7 +11,7 @@ import {
 } from '@motix/shared';
 import type { AppCtx } from '../context';
 import type { Db } from '../db/client';
-import { exercises, plans, sessionExercises, setLogs, sportProfiles, users, workoutSessions } from '../db/schema';
+import { clientLinks, exercises, plans, sessionExercises, setLogs, sportProfiles, trainerVideos, users, workoutSessions } from '../db/schema';
 import { badRequest, notFound } from '../lib/errors';
 import { addDays, mondayOf } from '../lib/days';
 import { track } from './events';
@@ -261,6 +261,15 @@ export async function sessionDetail(db: Db, userId: string, sessionId: string): 
     return { day: last.day, sets: mine.filter((h) => h.sessionId === last.sessionId).map((h) => ({ reps: h.reps, loadKg: h.loadKg })) };
   };
 
+  // Se il personal trainer del cliente ha caricato un video per l'esercizio, si mostra quello.
+  const ptVideos = items.length
+    ? await db
+        .select({ exerciseId: trainerVideos.exerciseId, url: trainerVideos.videoUrl })
+        .from(trainerVideos)
+        .innerJoin(clientLinks, eq(clientLinks.trainerId, trainerVideos.trainerId))
+        .where(and(eq(clientLinks.userId, userId), eq(clientLinks.status, 'active'), eq(trainerVideos.reviewStatus, 'approved'), inArray(trainerVideos.exerciseId, items.map((i) => i.ex.id))))
+    : [];
+
   return {
     id: s.id,
     title: s.title ?? 'Allenamento',
@@ -278,7 +287,7 @@ export async function sessionDetail(db: Db, userId: string, sessionId: string): 
         muscles: ex.muscles as Muscle[],
         loadable: ex.loadable,
         unit: ex.unit as 'reps' | 'seconds' | 'minutes',
-        videoUrl: ex.videoUrl,
+        videoUrl: ptVideos.find((v) => v.exerciseId === ex.id)?.url ?? ex.videoUrl,
       },
       targetSets: se.targetSets,
       targetReps: se.targetReps,

@@ -2,12 +2,14 @@ import { buildApp } from './app';
 import { loadConfig } from './config';
 import { openDb } from './db/client';
 import { DevMailer } from './lib/mailer';
-import { ensureExerciseLibrary } from './services/library';
+import { LocalStorage } from './lib/storage';
+import { ensureExerciseLibrary, ensureShopCatalog } from './services/library';
 
 const config = loadConfig();
 const handle = await openDb(config.databaseUrl);
 await handle.migrate();
 await ensureExerciseLibrary(handle.db);
+await ensureShopCatalog(handle.db);
 
 const app = await buildApp(
   {
@@ -15,6 +17,8 @@ const app = await buildApp(
     config,
     // TODO produzione: sostituire con un servizio di invio email con server in UE.
     mailer: new DevMailer((msg) => console.log(msg)),
+    // TODO produzione: archivio a oggetti con CDN in UE al posto del disco locale.
+    storage: new LocalStorage(config.mediaDir),
     now: () => new Date(),
   },
   { logger: true },

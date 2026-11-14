@@ -197,3 +197,51 @@ export const campaignSchema = z.object({
   userIds: z.array(z.string().uuid()).max(2000).optional(),
   segment: z.enum(['all', 'at_risk', 'trial', 'inactive']).optional(),
 });
+
+/* ---------- Community, shop, punti ---------- */
+
+export const postSchema = z
+  .object({
+    text: z.string().trim().max(1000).optional(),
+    mediaId: z.string().uuid().optional(),
+    visibility: z.enum(['structure', 'global']),
+  })
+  .refine((v) => Boolean(v.text) || Boolean(v.mediaId), { message: 'Scrivi qualcosa o aggiungi una foto o un video', path: ['text'] });
+
+export const commentSchema = z.object({ text: z.string().trim().min(1, 'Scrivi un commento').max(500) });
+
+export const reportSchema = z.object({
+  targetType: z.enum(['post', 'comment', 'user', 'trainer_video']),
+  targetId: z.string().uuid(),
+  reason: z.string().trim().min(3, 'Indica il motivo').max(300),
+});
+
+export const trainerVideoSchema = z.object({
+  title: z.string().trim().min(2, 'Dai un titolo al video').max(80),
+  mediaId: z.string().uuid(),
+  visibility: z.enum(['clients', 'community']),
+  exerciseId: z.string().uuid().optional(),
+});
+
+export const shopProductSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  category: z.enum(['sensor', 'equipment', 'apparel', 'accessories']),
+  blorUrl: z
+    .string()
+    .trim()
+    .url('Indirizzo non valido')
+    .refine((u) => /^https:\/\/([a-z0-9-]+\.)?blorcompany\.com(\/|$)/i.test(u), 'Il link deve portare al sito blorcompany.com'),
+  imageUrl: z.string().trim().url().optional(),
+  position: z.number().int().min(0).max(999).default(0),
+  visible: z.boolean().default(true),
+});
+
+export const rewardSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(300).optional(),
+  pointsRequired: z.number().int().min(1).max(1_000_000),
+  stock: z.number().int().min(0).max(100000).nullable().optional(),
+  active: z.boolean().default(true),
+});
+
+export const pointRulesSchema = z.object({ subscription: z.number().int().min(0).max(100000), renewal: z.number().int().min(0).max(100000) });

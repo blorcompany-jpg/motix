@@ -133,3 +133,20 @@ export const CONTAINER_LABELS: Record<Container, string> = {
 export const DEFAULT_HYDRATION_GOAL_ML = 2000;
 /** Giorni di storico dei progressi nella versione gratuita. */
 export const FREE_HISTORY_DAYS = 7;
+
+/* ---------- Community e shop ---------- */
+
+export const SHOP_CATEGORIES = ['sensor', 'equipment', 'apparel', 'accessories'] as const;
+export const SHOP_CATEGORY_LABELS: Record<(typeof SHOP_CATEGORIES)[number], string> = {
+  sensor: 'Sensore motix pod',
+  equipment: 'Attrezzatura',
+  apparel: 'Abbigliamento',
+  accessories: 'Accessori',
+};
+
+export const REPORT_REASONS = ['Contenuto offensivo', 'Spam o pubblicità', 'Nudità o contenuto sessuale', 'Molestie o bullismo', 'Altro'] as const;
+
+export const MAX_IMAGE_MB = 10;
+export const MAX_VIDEO_MB = 80;
+/** Punti assegnati al personal trainer, modificabili da BTECH dal pannello. */
+export const DEFAULT_POINT_RULES = { subscription: 100, renewal: 50 } as const;

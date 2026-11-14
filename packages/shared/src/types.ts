@@ -275,3 +275,88 @@ export interface StructureReportMonth {
   /** Quota degli iscritti attivi il mese prima che sono rimasti attivi. */
   retentionPct: number | null;
 }
+
+/* ---------- Community, shop, punti ---------- */
+
+export interface MediaRef {
+  id: string;
+  url: string;
+  type: 'image' | 'video';
+}
+
+export interface PostView {
+  id: string;
+  author: { id: string; name: string; role: Role; structure: string | null };
+  text: string | null;
+  media: { url: string; type: 'image' | 'video' } | null;
+  visibility: 'structure' | 'global';
+  createdAt: string;
+  likes: number;
+  liked: boolean;
+  comments: number;
+  mine: boolean;
+}
+
+export interface CommentView {
+  id: string;
+  author: { id: string; name: string };
+  text: string;
+  createdAt: string;
+  mine: boolean;
+}
+
+export interface ProfileView {
+  id: string;
+  name: string;
+  role: Role;
+  structure: string | null;
+  private: boolean;
+  blocked: boolean;
+  trainer: { id: string; specializations: string[]; bio: string | null } | null;
+  stats: { sessions: number; posts: number } | null;
+  posts: PostView[];
+}
+
+export interface LeaderboardRow {
+  rank: number;
+  userId: string;
+  name: string;
+  sessions: number;
+  me: boolean;
+}
+
+export interface TrainerCard {
+  trainerId: string;
+  userId: string;
+  name: string;
+  specializations: string[];
+  bio: string | null;
+}
+
+export type ShopCategory = 'sensor' | 'equipment' | 'apparel' | 'accessories';
+
+export interface ShopProduct {
+  id: string;
+  name: string;
+  category: ShopCategory;
+  imageUrl: string | null;
+}
+
+export interface TrainerVideoView {
+  id: string;
+  title: string;
+  url: string;
+  visibility: 'clients' | 'community';
+  reviewStatus: 'draft' | 'pending' | 'approved' | 'rejected';
+  exercise: string | null;
+  trainerName: string;
+  createdAt: string;
+}
+
+export interface PointsResponse {
+  balance: number;
+  rules: { subscription: number; renewal: number };
+  movements: Array<{ id: string; reason: 'subscription' | 'renewal' | 'bonus' | 'redemption' | 'adjustment'; points: number; balanceAfter: number; note: string | null; at: string }>;
+  rewards: Array<{ id: string; name: string; description: string | null; pointsRequired: number; available: boolean }>;
+  redemptions: Array<{ id: string; reward: string; points: number; status: 'requested' | 'approved' | 'rejected' | 'delivered'; at: string }>;
+}

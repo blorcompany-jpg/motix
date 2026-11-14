@@ -577,6 +577,28 @@ export const riskScores = pgTable(
   (t) => [uniqueIndex('risk_scores_user_day_uq').on(t.userId, t.day)],
 );
 
+/** File caricati dagli utenti (foto e video). `key` è il nome nell'archivio dei file. */
+export const mediaFiles = pgTable(
+  'media_files',
+  {
+    id: id(),
+    ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    kind: mediaTypeEnum('kind').notNull(),
+    contentType: text('content_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('media_files_key_uq').on(t.key), index('media_files_owner_idx').on(t.ownerId)],
+);
+
+/** Impostazioni modificabili da BTECH dal pannello (es. valore dei punti). */
+export const settings = pgTable('settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').$type<Record<string, unknown>>().notNull(),
+  updatedAt: updatedAt(),
+});
+
 /* ---------- Community ---------- */
 
 export const posts = pgTable(
