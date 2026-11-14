@@ -13,7 +13,7 @@ import {
   type SportProfile,
 } from '@motix/shared';
 import { requireRole } from '../auth';
-import { exercises, measurements, plans, sessionExercises, setLogs, sportProfiles, users, workoutSessions } from '../db/schema';
+import { exercises, measurements, plans, sessionExercises, setLogs, sportProfiles, trainers, users, workoutSessions } from '../db/schema';
 import { assertPlausibleDay, toDay } from '../lib/days';
 import { conflict, forbidden, notFound, parse } from '../lib/errors';
 import { track } from '../services/events';
@@ -120,10 +120,21 @@ export async function trainingRoutes(app: FastifyInstance) {
     } catch {
       rationale = plan.rationale ? [plan.rationale] : [];
     }
+    let trainerName: string | null = null;
+    if (plan.authorTrainerId) {
+      const [t] = await db
+        .select({ firstName: users.firstName, lastName: users.lastName })
+        .from(trainers)
+        .innerJoin(users, eq(users.id, trainers.userId))
+        .where(eq(trainers.id, plan.authorTrainerId))
+        .limit(1);
+      if (t) trainerName = `${t.firstName} ${t.lastName}`;
+    }
     return {
       plan: {
         id: plan.id,
         author: plan.author,
+        trainerName,
         weekStart: plan.weekStart,
         rationale,
         sessions: sessions.map((s) => summaries.get(s.id)!).filter(Boolean),

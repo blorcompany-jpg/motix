@@ -79,8 +79,8 @@ async function approvedLibrary(db: Db): Promise<LibraryExercise[]> {
   }));
 }
 
-/** Genera il piano della settimana a partire dal giorno indicato e archivia quello precedente. */
-export async function generatePlan(ctx: AppCtx, userId: string, startDay: string) {
+/** Compone la proposta di piano dal questionario dell'utente, senza salvarla. */
+export async function draftPlan(ctx: AppCtx, userId: string, startDay: string) {
   const { db } = ctx;
   const [row] = await db
     .select({ p: sportProfiles, birthDate: users.birthDate, structureId: users.structureId })
@@ -119,9 +119,38 @@ export async function generatePlan(ctx: AppCtx, userId: string, startDay: string
     lastLoads,
   });
   if (!built.sessions.length) throw badRequest('plan_empty', 'Con questi attrezzi e limitazioni non riesco a comporre un piano: modifica il questionario');
+  return { built, library, structureId: row.structureId };
+}
 
+/** Genera il piano della settimana a partire dal giorno indicato e archivia quello precedente. */
+export async function generatePlan(ctx: AppCtx, userId: string, startDay: string) {
+  const { db } = ctx;
+  const { built, structureId } = await draftPlan(ctx, userId, startDay);
+  const planId = await savePlan(db, {
+    userId,
+    author: 'ai',
+    trainerId: null,
+    weekStart: startDay,
+    rationale: built.rationale,
+    sessions: built.sessions.map((s) => ({ title: s.title, day: addDays(startDay, s.dayOffset), exercises: s.exercises })),
+  });
+  await track(db, 'piano_generato', { userId, structureId }, { sessions: built.sessions.length });
+  return planId;
+}
+
+export interface PlanToSave {
+  userId: string;
+  author: 'ai' | 'trainer';
+  trainerId: string | null;
+  weekStart: string;
+  rationale: string[];
+  sessions: Array<{ title: string; day: string; exercises: Array<{ exerciseId: string; sets: number; reps: number; restSeconds: number; loadKg: number | null }> }>;
+}
+
+/** Salva un piano (generato o scritto dal personal trainer) e archivia quello attivo. */
+export async function savePlan(db: Db, input: PlanToSave) {
   return db.transaction(async (tx) => {
-    const previous = await tx.select({ id: plans.id, version: plans.version }).from(plans).where(and(eq(plans.userId, userId), eq(plans.status, 'active')));
+    const previous = await tx.select({ id: plans.id, version: plans.version }).from(plans).where(and(eq(plans.userId, input.userId), eq(plans.status, 'active')));
     if (previous.length) {
       const ids = previous.map((p) => p.id);
       // Le sedute non iniziate del piano precedente vengono sostituite; quelle fatte restano nel diario.
@@ -136,18 +165,16 @@ export async function generatePlan(ctx: AppCtx, userId: string, startDay: string
     const [plan] = await tx
       .insert(plans)
       .values({
-        userId,
-        author: 'ai',
-        weekStart: startDay,
+        userId: input.userId,
+        author: input.author,
+        authorTrainerId: input.trainerId,
+        weekStart: input.weekStart,
         version: Math.max(0, ...previous.map((p) => p.version)) + 1,
-        rationale: JSON.stringify(built.rationale),
+        rationale: JSON.stringify(input.rationale),
       })
       .returning();
-    for (const s of built.sessions) {
-      const [session] = await tx
-        .insert(workoutSessions)
-        .values({ planId: plan!.id, userId, title: s.title, scheduledDate: addDays(startDay, s.dayOffset) })
-        .returning();
+    for (const s of input.sessions) {
+      const [session] = await tx.insert(workoutSessions).values({ planId: plan!.id, userId: input.userId, title: s.title, scheduledDate: s.day }).returning();
       await tx.insert(sessionExercises).values(
         s.exercises.map((ex, i) => ({
           sessionId: session!.id,
@@ -160,7 +187,6 @@ export async function generatePlan(ctx: AppCtx, userId: string, startDay: string
         })),
       );
     }
-    await track(tx, 'piano_generato', { userId, structureId: row.structureId }, { sessions: built.sessions.length });
     return plan!.id;
   });
 }

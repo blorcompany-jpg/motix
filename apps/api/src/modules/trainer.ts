@@ -6,6 +6,7 @@ import { requireRole } from '../auth';
 import { clientLinks, structures, subscriptions, trainerStructures, trainers, users } from '../db/schema';
 import { badRequest, conflict, forbidden, notFound, parse } from '../lib/errors';
 import { track } from '../services/events';
+import { riskFor } from '../services/risk';
 import { findUserByEmail } from '../services/users';
 
 export async function trainerRoutes(app: FastifyInstance) {
@@ -66,7 +67,11 @@ export async function trainerRoutes(app: FastifyInstance) {
       .orderBy(desc(clientLinks.createdAt));
     const ids = rows.map((r) => r.u.id);
     const subs = ids.length ? await db.select().from(subscriptions).where(inArray(subscriptions.userId, ids)) : [];
+    // Il rischio abbandono si calcola solo per i clienti attivi che condividono i dati.
+    const sharing = rows.filter((r) => r.link.status === 'active' && r.link.dataConsent).map((r) => r.u.id);
+    const risks = await riskFor(db, sharing, ctx.now());
     return rows.map(({ link, u }) => ({
+      risk: risks.get(u.id) ?? null,
       linkId: link.id,
       status: link.status,
       startedAt: link.startedAt,

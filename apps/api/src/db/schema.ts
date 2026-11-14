@@ -329,6 +329,20 @@ export const clientLinks = pgTable(
   (t) => [index('client_links_user_idx').on(t.userId), index('client_links_trainer_idx').on(t.trainerId)],
 );
 
+/** Note del CRM: appunti dello staff della struttura su un iscritto. */
+export const memberNotes = pgTable(
+  'member_notes',
+  {
+    id: id(),
+    structureId: uuid('structure_id').notNull().references(() => structures.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    authorUserId: uuid('author_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('member_notes_member_idx').on(t.structureId, t.userId)],
+);
+
 /* ---------- Esercizi, piani, sedute ---------- */
 
 export const exercises = pgTable(

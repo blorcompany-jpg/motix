@@ -157,3 +157,43 @@ export const measurementSchema = z.object({
   weightKg: z.number().min(30).max(250).optional(),
   circumferences: z.record(z.string().max(20), z.number().min(10).max(250)).optional(),
 });
+
+/* ---------- Personal trainer e struttura ---------- */
+
+export const trainerPlanSchema = z.object({
+  /** Nota del personal trainer, mostrata al cliente in «Perché questo piano». */
+  note: z.string().trim().max(600).optional(),
+  sessions: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1, 'Dai un nome alla seduta').max(60),
+        day,
+        exercises: z
+          .array(
+            z.object({
+              exerciseId: z.string().uuid(),
+              sets: z.number().int().min(1).max(10),
+              reps: z.number().int().min(1).max(200),
+              loadKg: z.number().min(0).max(500).nullable().optional(),
+              restSeconds: z.number().int().min(0).max(600),
+            }),
+          )
+          .min(1, 'Aggiungi almeno un esercizio')
+          .max(15),
+      }),
+    )
+    .min(1, 'Aggiungi almeno una seduta')
+    .max(7),
+});
+export type TrainerPlanInput = z.infer<typeof trainerPlanSchema>;
+
+export const messageSchema = z.object({ text: z.string().trim().min(1, 'Scrivi un messaggio').max(2000) });
+
+export const noteSchema = z.object({ text: z.string().trim().min(1, 'Scrivi una nota').max(1000) });
+
+export const campaignSchema = z.object({
+  text: z.string().trim().min(1, 'Scrivi un messaggio').max(2000),
+  /** A chi inviare: iscritti scelti a mano oppure un gruppo. */
+  userIds: z.array(z.string().uuid()).max(2000).optional(),
+  segment: z.enum(['all', 'at_risk', 'trial', 'inactive']).optional(),
+});

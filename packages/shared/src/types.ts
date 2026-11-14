@@ -78,6 +78,8 @@ export interface PlanResponse {
   plan: {
     id: string;
     author: 'ai' | 'trainer';
+    /** Nome del personal trainer che ha creato il piano. */
+    trainerName: string | null;
     weekStart: string;
     rationale: string[];
     sessions: PlanSessionSummary[];
@@ -184,4 +186,92 @@ export interface SubscriptionResponse {
   installmentsPaid: number;
   installmentsTotal: number;
   priceMonthlyEur: number;
+}
+
+/* ---------- Personal trainer e struttura ---------- */
+
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+/** Rischio abbandono (sezione 8.4): punteggio, motivi e azione suggerita. */
+export interface RiskInfo {
+  level: RiskLevel;
+  score: number;
+  reasons: string[];
+  suggestion: string | null;
+}
+
+export interface ClientReport {
+  client: { id: string; firstName: string; lastName: string };
+  profile: SportProfile | null;
+  subscriptionStatus: SubscriptionStatus | null;
+  risk: RiskInfo;
+  lastSessionDay: string | null;
+  weeks: Array<{ weekStart: string; sessions: number; volumeKg: number }>;
+  sessions: Array<{ id: string; title: string; day: string; sets: number; volumeKg: number; perceivedEffort: number | null }>;
+  strength: Array<{ exercise: string; firstKg: number; lastKg: number }>;
+  weight: Array<{ day: string; weightKg: number }>;
+  hydration: { averageMl: number; daysOnTarget: number; trackedDays: number };
+}
+
+export interface PlanEditorSession {
+  title: string;
+  day: string;
+  exercises: Array<{ exerciseId: string; name: string; unit: 'reps' | 'seconds' | 'minutes'; loadable: boolean; sets: number; reps: number; loadKg: number | null; restSeconds: number }>;
+}
+
+export interface PlanEditorResponse {
+  author: 'ai' | 'trainer' | null;
+  note: string;
+  sessions: PlanEditorSession[];
+}
+
+export interface ConversationSummary {
+  id: string;
+  with: { id: string; name: string; role: Role };
+  lastMessage: { text: string; at: string; mine: boolean } | null;
+  unread: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  text: string;
+  at: string;
+  mine: boolean;
+}
+
+export interface MemberRow {
+  id: string;
+  sharesData: boolean;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  joinedAt: string | null;
+  lastLoginAt: string | null;
+  subscriptionStatus: SubscriptionStatus | null;
+  trainer: string | null;
+  goal: Goal | null;
+  sessions30d: number | null;
+  lastSessionDay: string | null;
+  risk: RiskInfo | null;
+}
+
+export interface StructureOverview {
+  members: number;
+  activeThisWeek: number;
+  inTrial: number;
+  subscribed: number;
+  trainers: number;
+  instructors: number;
+  atRisk: number;
+  avgSessionsPerWeek: number;
+}
+
+export interface StructureReportMonth {
+  month: string;
+  newMembers: number;
+  activeMembers: number;
+  sessions: number;
+  trialsStarted: number;
+  /** Quota degli iscritti attivi il mese prima che sono rimasti attivi. */
+  retentionPct: number | null;
 }

@@ -19,6 +19,7 @@ import {
 import { conflict, forbidden, notFound, parse } from '../lib/errors';
 import { newOpaqueToken } from '../lib/tokens';
 import { audit, track } from '../services/events';
+import { structureScope, type ScopeOptions } from '../services/scope';
 import { findUserByEmail } from '../services/users';
 
 const INVITE_TTL_DAYS = 14;
@@ -27,28 +28,7 @@ export async function structureRoutes(app: FastifyInstance) {
   const ctx = app.ctx;
   const { db } = ctx;
 
-  /** Struttura di chi fa la richiesta: il titolare la possiede, l'istruttore ci lavora. */
-  const scope = async (req: FastifyRequest, opts: { ownerOnly?: boolean; mustBeApproved?: boolean } = {}) => {
-    const auth = requireRole(req, ...(opts.ownerOnly ? (['owner'] as const) : (['owner', 'instructor'] as const)));
-    let structure;
-    let instructorId: string | null = null;
-    if (auth.role === 'owner') {
-      [structure] = await db.select().from(structures).where(eq(structures.ownerUserId, auth.userId)).limit(1);
-    } else {
-      const [row] = await db
-        .select({ s: structures, i: instructors })
-        .from(instructors)
-        .innerJoin(structures, eq(structures.id, instructors.structureId))
-        .where(and(eq(instructors.userId, auth.userId), eq(instructors.active, true)))
-        .limit(1);
-      structure = row?.s;
-      instructorId = row?.i.id ?? null;
-    }
-    if (!structure) throw notFound('Struttura non trovata');
-    if (opts.mustBeApproved !== false && structure.status !== 'approved')
-      throw forbidden('La struttura è in attesa di approvazione da parte di BTECH', 'structure_not_approved');
-    return { auth, structure, instructorId };
-  };
+  const scope = (req: FastifyRequest, opts: ScopeOptions = {}) => structureScope(ctx, req, opts);
 
   const joinLink = (code: string) => `${ctx.config.publicWebUrl}/j/${code}`;
 
@@ -79,78 +59,6 @@ export async function structureRoutes(app: FastifyInstance) {
       code: s.code,
       link,
       svg: await QRCode.toString(link, { type: 'svg', margin: 1, color: { dark: '#0B1220', light: '#FFFFFF' } }),
-    };
-  });
-
-  /* ---------- Panoramica e iscritti ---------- */
-  app.get('/structure/overview', async (req) => {
-    const { structure: s } = await scope(req, { ownerOnly: true });
-    const members = await db.select({ id: users.id }).from(users).where(and(eq(users.structureId, s.id), eq(users.role, 'user')));
-    const ids = members.map((m) => m.id);
-    const subs = ids.length ? await db.select().from(subscriptions).where(inArray(subscriptions.userId, ids)) : [];
-    const [pts] = await db
-      .select({ n: count() })
-      .from(trainerStructures)
-      .where(and(eq(trainerStructures.structureId, s.id), eq(trainerStructures.status, 'active')));
-    const [ins] = await db
-      .select({ n: count() })
-      .from(instructors)
-      .where(and(eq(instructors.structureId, s.id), eq(instructors.active, true)));
-    return {
-      members: ids.length,
-      inTrial: subs.filter((x) => x.status === 'trial').length,
-      subscribed: subs.filter((x) => x.status === 'active').length,
-      trainers: pts?.n ?? 0,
-      instructors: ins?.n ?? 0,
-    };
-  });
-
-  app.get('/structure/members', async (req) => {
-    const { structure: s, instructorId } = await scope(req);
-    let rows = await db
-      .select()
-      .from(users)
-      .where(and(eq(users.structureId, s.id), eq(users.role, 'user'), eq(users.status, 'active')))
-      .orderBy(desc(users.structureJoinedAt));
-    if (instructorId) {
-      // L'istruttore vede solo gli iscritti che gli sono stati assegnati.
-      const assigned = await db
-        .select({ userId: instructorAssignments.userId })
-        .from(instructorAssignments)
-        .where(eq(instructorAssignments.instructorId, instructorId));
-      const set = new Set(assigned.map((a) => a.userId));
-      rows = rows.filter((r) => set.has(r.id));
-    }
-    const ids = rows.map((r) => r.id);
-    if (!ids.length) return { members: [] };
-    const consents = await db
-      .select()
-      .from(userConsents)
-      .where(and(inArray(userConsents.userId, ids), eq(userConsents.type, 'share_structure')));
-    const subs = await db.select().from(subscriptions).where(inArray(subscriptions.userId, ids));
-    const links = await db
-      .select({ userId: clientLinks.userId, firstName: users.firstName, lastName: users.lastName })
-      .from(clientLinks)
-      .innerJoin(trainers, eq(trainers.id, clientLinks.trainerId))
-      .innerJoin(users, eq(users.id, trainers.userId))
-      .where(and(inArray(clientLinks.userId, ids), eq(clientLinks.status, 'active')));
-    return {
-      members: rows.map((u) => {
-        const shared = consents.find((c) => c.userId === u.id)?.granted ?? false;
-        const pt = links.find((l) => l.userId === u.id);
-        return {
-          id: u.id,
-          // Senza consenso alla condivisione la struttura non vede i dati personali.
-          sharesData: shared,
-          firstName: shared ? u.firstName : null,
-          lastName: shared ? u.lastName : null,
-          email: shared ? u.email : null,
-          joinedAt: u.structureJoinedAt,
-          lastLoginAt: shared ? u.lastLoginAt : null,
-          subscriptionStatus: subs.find((x) => x.userId === u.id)?.status ?? null,
-          trainer: shared && pt ? `${pt.firstName} ${pt.lastName}` : null,
-        };
-      }),
     };
   });
 
