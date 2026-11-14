@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MUSCLE_LABELS, type PlanSessionSummary, type ProgressResponse } from '@motix/shared';
-import { Bars, Body, Button, Card, Chip, ChipRow, ErrorBox, Eyebrow, H2, H3, HBar, Loading, Notice, Row, Screen, Small, Stat } from '@/components/ui';
+import { Bars, Body, Button, Card, Chip, ChipRow, ErrorBox, Eyebrow, H2, H3, HBar, Loading, Notice, Row, Screen, Small, Stat, TopBar } from '@/components/ui';
 import { kg, liters, shortDate, today, weekdayInitial } from '@/lib/dates';
 import { colors, font } from '@/lib/theme';
 import { useApi } from '@/lib/useApi';
@@ -18,6 +18,7 @@ export default function Progressi() {
 
   return (
     <Screen>
+      <TopBar title="Progressi" onBack={() => router.back()} />
       <View style={{ gap: 2 }}>
         <Eyebrow>{p ? `Ultimi ${p.days} giorni` : 'Progressi'}</Eyebrow>
         <H2>I tuoi progressi</H2>

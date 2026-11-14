@@ -99,3 +99,19 @@ export async function download(path: string, filename: string) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+/** Carica una foto o un video e restituisce il riferimento da allegare. */
+export async function upload(file: File): Promise<{ id: string; url: string; type: 'image' | 'video' }> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const send = (token?: string) => fetch(BASE + '/media', { method: 'POST', body: form, headers: token ? { authorization: `Bearer ${token}` } : {} });
+  let res = await send(session.get()?.accessToken).catch(() => null);
+  if (res?.status === 401) {
+    const next = await refresh();
+    if (next) res = await send(next.accessToken).catch(() => null);
+  }
+  if (!res) throw new ApiFailure(0, 'network', 'Caricamento non riuscito: controlla la connessione e riprova');
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiFailure(res.status, data?.error?.code ?? 'error', data?.error?.message ?? 'Caricamento non riuscito');
+  return data;
+}

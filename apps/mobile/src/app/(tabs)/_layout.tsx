@@ -23,7 +23,8 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="home" options={{ title: 'Home', tabBarIcon: ({ color }) => <TabIcon name="home" color={color} /> }} />
       <Tabs.Screen name="piano" options={{ title: 'Piano', href: isUser ? undefined : null, tabBarIcon: ({ color }) => <TabIcon name="piano" color={color} /> }} />
-      <Tabs.Screen name="progressi" options={{ title: 'Progressi', href: isUser ? undefined : null, tabBarIcon: ({ color }) => <TabIcon name="progressi" color={color} /> }} />
+      <Tabs.Screen name="community" options={{ title: 'Community', href: isUser || user.role === 'personal_trainer' ? undefined : null, tabBarIcon: ({ color }) => <TabIcon name="community" color={color} /> }} />
+      <Tabs.Screen name="shop" options={{ title: 'Shop', tabBarIcon: ({ color }) => <TabIcon name="shop" color={color} /> }} />
       <Tabs.Screen name="profilo" options={{ title: 'Profilo', tabBarIcon: ({ color }) => <TabIcon name="profilo" color={color} /> }} />
     </Tabs>
   );

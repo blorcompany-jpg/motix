@@ -133,10 +133,13 @@ export default function Home() {
 
       {h && (
         <Row style={{ alignItems: 'stretch' }}>
+          <Pressable style={{ flex: 1 }} onPress={() => router.push('/progressi')} accessibilityRole="button" accessibilityLabel="Apri i progressi">
           <Card style={{ flex: 1 }}>
             <Text style={{ fontFamily: font.displayHeavy, fontSize: 34, color: colors.energia }}>{h.streakDays}</Text>
             <Small style={{ color: colors.nebbia }}>{h.streakDays === 1 ? 'giorno attivo di fila' : 'giorni attivi di fila'}</Small>
+            <Small style={{ color: colors.acqua, fontFamily: font.textSemi }}>Progressi ›</Small>
           </Card>
+          </Pressable>
           <Card style={{ flex: 1.6 }}>
             <Eyebrow>Consiglio del giorno</Eyebrow>
             <Small style={{ color: colors.ghiaccio, fontSize: 14, lineHeight: 20 }}>{h.tip}</Small>

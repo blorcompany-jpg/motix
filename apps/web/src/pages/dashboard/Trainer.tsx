@@ -3,6 +3,7 @@ import type { ClientReport, MeResponse, PlanEditorResponse, PlanEditorSession, R
 import { api } from '../../api';
 import { Badge, ErrorBox, Field } from '../../ui';
 import { Messages, ReportView, RiskBadge, Tabs, useLoad } from './common';
+import { TrainerPoints, TrainerVideos } from './TrainerExtras';
 
 interface ClientRow {
   linkId: string;
@@ -207,7 +208,8 @@ function ClientPage({ row, onBack, onMessage }: { row: ClientRow; onBack: () => 
 export function TrainerArea({ me }: { me: MeResponse }) {
   const t = me.trainer!;
   const approved = t.status === 'approved';
-  const [tab, setTab] = useState<'clients' | 'messages' | 'structures'>('clients');
+  const [tab, setTab] = useState<'clients' | 'messages' | 'videos' | 'points' | 'structures'>('clients');
+  const [balance, setBalance] = useState(t.pointsBalance);
   const [open, setOpen] = useState<ClientRow | null>(null);
   const [chatWith, setChatWith] = useState<string | null>(null);
   const profile = useLoad<any>('/trainer');
@@ -258,11 +260,11 @@ export function TrainerArea({ me }: { me: MeResponse }) {
         </div>
         <div className="card stack tight">
           <span className="eyebrow">Punti</span>
-          <div className="stat"><b>{t.pointsBalance}</b></div>
+          <div className="stat"><b>{balance}</b></div>
           <p style={{ fontSize: 14 }}>Guadagni punti per ogni cliente che si abbona e rinnova; li converti in premi.</p>
         </div>
       </div>
-      <Tabs tabs={{ clients: 'Clienti', messages: 'Messaggi', structures: 'Strutture' }} value={tab} onChange={(v) => { setTab(v); setNotice(''); setError(null); }} />
+      <Tabs tabs={{ clients: 'Clienti', messages: 'Messaggi', videos: 'Video', points: 'Punti e premi', structures: 'Strutture' }} value={tab} onChange={(v) => { setTab(v); setNotice(''); setError(null); }} />
       <ErrorBox error={error ?? clients.error} />
       {notice && <div className="alert ok" style={{ marginBottom: 16 }}>{notice}</div>}
 
@@ -314,6 +316,9 @@ export function TrainerArea({ me }: { me: MeResponse }) {
       )}
 
       {tab === 'messages' && <Messages openWith={chatWith} emptyHint="Nessuna conversazione: apri un cliente e scegli «Scrivi un messaggio»." />}
+
+      {tab === 'videos' && (approved ? <TrainerVideos /> : <div className="card empty">Potrai caricare i video dopo l’approvazione del profilo.</div>)}
+      {tab === 'points' && (approved ? <TrainerPoints onBalance={setBalance} /> : <div className="card empty">I punti si attivano dopo l’approvazione del profilo.</div>)}
 
       {tab === 'structures' && (
         <div className="stack">

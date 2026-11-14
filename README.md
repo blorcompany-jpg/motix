@@ -21,7 +21,7 @@ La specifica completa è nel documento «MOTIX – Progetto dell'app»; l'identi
 | 2. Registrazione e ruoli | Fatta |
 | 3. App utente: piano, sedute, idratazione, prova di 14 giorni | Fatta |
 | 4. Area personal trainer e dashboard delle palestre (funzioni complete) | Fatta |
-| 5. Community, shop e punti | Da fare |
+| 5. Community, shop e punti | Fatta |
 | 6. Sensore e motore AI | Da fare |
 
 ### Cosa funziona oggi
@@ -51,6 +51,13 @@ La specifica completa è nel documento «MOTIX – Progetto dell'app»; l'identi
 - **Rischio abbandono**: punteggio a regole (`apps/api/src/services/risk.ts`) su giorni dall'ultima seduta, calo di frequenza,
   sedute saltate e ultimo accesso.
 - **Messaggi**: chat tra personal trainer e cliente e tra struttura e iscritto, anche nell'app; per chi si allena rispondere è Premium.
+- **Community** (app): feed della struttura e generale, post con foto o video, like, commenti, profili, classifica della
+  struttura, elenco dei personal trainer, chat tra iscritti con profilo pubblico, segnalazioni e blocchi.
+- **Shop by BLOR** (app): le voci del catalogo aprono il sito blorcompany.com con il codice della struttura o del personal trainer.
+- **Video dei personal trainer**: per i propri clienti (compaiono nell'esercizio del piano) o per la community dopo la revisione.
+- **Punti e premi**: punti al personal trainer quando un cliente si abbona o rinnova, catalogo premi, richieste e consegna.
+- **Pannello BTECH**: moderazione delle segnalazioni, approvazione dei video, catalogo dello shop, premi e valore dei punti,
+  attivazione manuale di un abbonamento (pilot e assistenza).
 - **Privacy**: struttura e personal trainer vedono i dati personali solo con il consenso dell'utente; registro delle azioni sensibili;
   cancellazione dell'account dall'app.
 
@@ -86,6 +93,10 @@ npm run typecheck   # controllo dei tipi su tutto il progetto
   da BTECH, con i video, prima del lancio.
 - **Abbonamento dagli store**: oggi la prova è gestita dall'app e, senza acquisto, finisce nella versione gratuita. Va deciso
   con Apple e Google se la prova diventa un'offerta introduttiva dello store (l'utente si abbona subito e paga dal 15° giorno).
+- **Archivio dei file**: foto e video oggi sono salvati sul disco del server (`apps/api/src/lib/storage.ts`). In produzione va
+  usato un archivio a oggetti con CDN in UE, con compressione dei video.
+- **Moderazione**: i post sono pubblicati subito e nascosti dopo tre segnalazioni, in attesa di BTECH. Non c'è ancora un filtro
+  automatico dei contenuti.
 - **Promemoria** di allenamento, idratazione e prova: richiedono le notifiche push (tappa successiva).
 - Servizio di invio email con server in UE (oggi le email sono solo simulate): `apps/api/src/lib/mailer.ts`.
 - Database PostgreSQL gestito in una regione UE e `JWT_SECRET` casuale.

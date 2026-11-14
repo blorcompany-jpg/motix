@@ -113,3 +113,24 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
     throw e;
   }
 }
+
+/** Carica una foto o un video scelto dalla galleria e restituisce il riferimento da allegare. */
+export async function uploadMedia(asset: { uri: string; mimeType?: string; fileName?: string | null; file?: File }): Promise<{ id: string; url: string; type: 'image' | 'video' }> {
+  const form = new FormData();
+  if (Platform.OS === 'web') form.append('file', asset.file ?? (await (await fetch(asset.uri)).blob()), asset.fileName ?? 'file');
+  else form.append('file', { uri: asset.uri, name: asset.fileName ?? 'file', type: asset.mimeType ?? 'application/octet-stream' } as unknown as Blob);
+  const send = async (token?: string) => fetch(`${BASE}/media`, { method: 'POST', body: form, headers: token ? { authorization: `Bearer ${token}` } : {} });
+  let res: Response;
+  try {
+    res = await send((await session.get())?.accessToken);
+    if (res.status === 401) {
+      const next = await refresh();
+      if (next) res = await send(next.accessToken);
+    }
+  } catch {
+    throw new ApiFailure(0, 'network', 'Caricamento non riuscito: controlla la rete e riprova');
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiFailure(res.status, data?.error?.code ?? 'error', data?.error?.message ?? 'Caricamento non riuscito');
+  return data;
+}

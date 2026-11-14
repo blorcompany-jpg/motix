@@ -4,13 +4,14 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { Badge, ErrorBox, Field, Logo } from '../ui';
 import { Stat, Tabs, date, useLoad } from './dashboard/common';
+import { Moderation, RewardsAdmin, ShopAdmin } from './dashboard/AdminExtras';
 import { StructureDashboard } from './dashboard/Owner';
 import { TrainerArea } from './dashboard/Trainer';
 
 /* ================= Pannello BTECH ================= */
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'structures' | 'trainers' | 'users'>('structures');
+  const [tab, setTab] = useState<'structures' | 'trainers' | 'users' | 'moderation' | 'shop' | 'rewards'>('structures');
   const [filter, setFilter] = useState('pending');
   const overview = useLoad<any>('/admin/overview');
   const structures = useLoad<{ structures: any[] }>(tab === 'structures' ? `/admin/structures${filter ? `?status=${filter}` : ''}` : null);
@@ -69,7 +70,7 @@ function AdminPanel() {
         <Stat value={o?.users ?? 0} label="Utenti registrati" />
         <Stat value={o?.subscriptions?.active ?? 0} label={`Abbonati · ${o?.subscriptions?.trial ?? 0} in prova`} />
       </div>
-      <Tabs tabs={{ structures: 'Strutture', trainers: 'Personal trainer', users: 'Utenti' }} value={tab} onChange={setTab} />
+      <Tabs tabs={{ structures: 'Strutture', trainers: 'Personal trainer', users: 'Utenti', moderation: 'Moderazione', shop: 'Shop', rewards: 'Punti e premi' }} value={tab} onChange={setTab} />
       <ErrorBox error={error ?? structures.error ?? trainers.error} />
 
       {tab === 'structures' && (
@@ -120,6 +121,10 @@ function AdminPanel() {
         </div>
       )}
 
+      {tab === 'moderation' && <Moderation />}
+      {tab === 'shop' && <ShopAdmin />}
+      {tab === 'rewards' && <RewardsAdmin />}
+
       {tab === 'users' && (
         <div className="stack">
           <form className="card row" style={{ alignItems: 'flex-end' }} onSubmit={search}>
@@ -132,7 +137,7 @@ function AdminPanel() {
             <div className="card">
               {users.length ? (
                 <table>
-                  <thead><tr><th>Utente</th><th>Ruolo</th><th>Stato</th><th>Registrato</th><th>Ultimo accesso</th></tr></thead>
+                  <thead><tr><th>Utente</th><th>Ruolo</th><th>Stato</th><th>Registrato</th><th>Ultimo accesso</th><th /></tr></thead>
                   <tbody>
                     {users.map((u) => (
                       <tr key={u.id}>
@@ -141,6 +146,25 @@ function AdminPanel() {
                         <td><Badge status={u.status} label={u.status === 'pending_parental_consent' ? 'Attesa consenso genitore' : undefined} /></td>
                         <td>{date(u.createdAt)}</td>
                         <td>{date(u.lastLoginAt)}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          {u.role === 'user' && (
+                            <button
+                              className="btn ghost small"
+                              onClick={async () => {
+                                if (!window.confirm(`Attivare l’abbonamento di ${u.firstName} ${u.lastName}? Se ha un personal trainer, gli vengono assegnati i punti.`)) return;
+                                setError(null);
+                                try {
+                                  const r = await api<{ points: number }>('POST', `/admin/users/${u.id}/subscription/activate`);
+                                  window.alert(r.points ? `Abbonamento attivato: ${r.points} punti al personal trainer.` : 'Abbonamento attivato.');
+                                } catch (e) {
+                                  setError(e);
+                                }
+                              }}
+                            >
+                              Attiva abbonamento
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
