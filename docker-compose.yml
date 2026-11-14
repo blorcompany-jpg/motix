@@ -1,0 +1,13 @@
+# Ambiente di sviluppo: database PostgreSQL 16.
+# In produzione usare un PostgreSQL gestito in una regione UE.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: motix
+      POSTGRES_PASSWORD: motix
+      POSTGRES_DB: motix
+    ports: ["5432:5432"]
+    volumes: ["motix-db:/var/lib/postgresql/data"]
+volumes:
+  motix-db:
