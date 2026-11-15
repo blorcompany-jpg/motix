@@ -81,7 +81,11 @@ export interface PlanResponse {
     /** Nome del personal trainer che ha creato il piano. */
     trainerName: string | null;
     weekStart: string;
+    /** Numero progressivo del piano: sale a ogni nuova settimana o nuova versione. */
+    version: number;
     rationale: string[];
+    /** Cosa è cambiato rispetto alla settimana prima; vuoto se il piano è nuovo. */
+    changes: string[];
     sessions: PlanSessionSummary[];
   } | null;
 }
@@ -92,6 +96,76 @@ export interface SetLog {
   reps: number;
   loadKg: number | null;
   source: 'manual' | 'sensor';
+  /** Dati del sensore, se la serie è stata registrata con il motix pod. */
+  sensor: SetSensorData | null;
+}
+
+export interface SetSensorData {
+  /** Velocità media della fase di andata, in metri al secondo. */
+  avgVelocity: number | null;
+  peakVelocity: number | null;
+  /** Da 0 a 100: quanto si somigliano le ripetizioni tra loro. */
+  regularity: number | null;
+  timeUnderTensionMs: number | null;
+  /** Calo di velocità tra le prime ripetizioni e l'ultima, in percentuale. */
+  velocityLossPct: number | null;
+  rangeM: number | null;
+}
+
+export interface SensorView {
+  id: string;
+  serial: string;
+  firmware: string | null;
+  /** «mine»: abbinato al mio account; «structure»: messo a disposizione dalla mia struttura. */
+  owner: 'mine' | 'structure';
+  batteryPct: number | null;
+  lastSeenAt: string | null;
+}
+
+export interface SensorsResponse {
+  premium: boolean;
+  sensors: SensorView[];
+}
+
+export interface SensorSetResponse {
+  session: SessionDetail;
+  analysis: SetSensorData & { reps: number };
+}
+
+export interface AdminSensor {
+  id: string;
+  serial: string;
+  firmware: string | null;
+  status: 'in_stock' | 'active' | 'faulty' | 'retired';
+  ownerType: 'btech' | 'structure' | 'user';
+  ownerName: string | null;
+  freeOfCharge: boolean;
+  batteryPct: number | null;
+  lastSeenAt: string | null;
+  pairedAt: string | null;
+  note: string | null;
+  openIssues: number;
+}
+
+export interface SensorIssueView {
+  id: string;
+  sensorId: string;
+  serial: string;
+  note: string;
+  reporter: string | null;
+  at: string;
+  resolvedAt: string | null;
+}
+
+export interface StructureSensor {
+  id: string;
+  serial: string;
+  status: 'in_stock' | 'active' | 'faulty' | 'retired';
+  freeOfCharge: boolean;
+  batteryPct: number | null;
+  lastSeenAt: string | null;
+  /** Serie registrate con questo sensore negli ultimi 30 giorni. */
+  setsLast30Days: number;
 }
 
 export interface SessionExerciseDetail {
@@ -137,7 +211,11 @@ export interface SessionSummary {
     bestLoadKg: number | null;
     previous: { reps: number; bestLoadKg: number | null } | null;
     trend: Trend;
+    /** Medie delle serie fatte con il sensore, e velocità della volta precedente. */
+    sensor: { sets: number; avgVelocity: number | null; regularity: number | null; velocityLossPct: number | null; previousAvgVelocity: number | null } | null;
   }>;
+  /** Totali delle serie registrate con il sensore; null se non è stato usato. */
+  sensor: { sets: number; avgVelocity: number | null; regularity: number | null; timeUnderTensionMs: number } | null;
   tips: string[];
 }
 
@@ -211,6 +289,12 @@ export interface ClientReport {
   strength: Array<{ exercise: string; firstKg: number; lastKg: number }>;
   weight: Array<{ day: string; weightKg: number }>;
   hydration: { averageMl: number; daysOnTarget: number; trackedDays: number };
+  /** Dati del sensore nel periodo: quante serie e, per esercizio, com'è cambiata la velocità. */
+  sensor: {
+    sets: number;
+    totalSets: number;
+    exercises: Array<{ exercise: string; sets: number; firstVelocity: number | null; lastVelocity: number | null; regularity: number | null; lastLoadKg: number | null }>;
+  };
 }
 
 export interface PlanEditorSession {

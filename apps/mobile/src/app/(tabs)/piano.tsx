@@ -54,6 +54,13 @@ export default function Piano() {
         </Card>
       )}
 
+      {p && p.changes.length > 0 && (
+        <Card style={{ borderColor: colors.energia }}>
+          <H3>Cosa cambia questa settimana</H3>
+          {p.changes.map((line, i) => <Body key={i} style={{ fontSize: 14, lineHeight: 21 }}>• {line}</Body>)}
+        </Card>
+      )}
+
       {p?.sessions.map((s) => {
         const done = Boolean(s.completedAt);
         return (

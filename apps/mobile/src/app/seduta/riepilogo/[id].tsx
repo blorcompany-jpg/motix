@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import type { SessionSummary, Trend } from '@motix/shared';
 import { Body, Button, Card, ErrorBox, Eyebrow, H2, H3, Loading, Row, Screen, Small, Stat } from '@/components/ui';
 import { kg, shortDate } from '@/lib/dates';
+import { velocity } from '@/lib/pod';
 import { colors, font } from '@/lib/theme';
 import { useApi } from '@/lib/useApi';
 
@@ -57,6 +58,20 @@ export default function Riepilogo() {
             </Body>
           </Card>
 
+          {s.sensor && (
+            <Card style={{ borderColor: colors.energia }}>
+              <H3>Con il sensore</H3>
+              <Row style={{ alignItems: 'stretch', gap: 8 }}>
+                <Stat value={s.sensor.sets} label={s.sensor.sets === 1 ? 'Serie misurata' : 'Serie misurate'} />
+                <Stat value={s.sensor.avgVelocity !== null ? s.sensor.avgVelocity.toFixed(2).replace('.', ',') : '—'} label="Velocità media (m/s)" />
+                <Stat value={s.sensor.regularity !== null ? Math.round(s.sensor.regularity) : '—'} label="Regolarità su 100" />
+              </Row>
+              <Small style={{ color: colors.nebbia }}>
+                {Math.round(s.sensor.timeUnderTensionMs / 1000)} secondi sotto tensione. La regolarità dice quanto le ripetizioni si somigliano per ritmo e ampiezza.
+              </Small>
+            </Card>
+          )}
+
           <Card>
             <H3>Esercizi</H3>
             {s.exercises.map((e, i) => {
@@ -69,6 +84,13 @@ export default function Riepilogo() {
                       {e.sets} serie · {e.reps} rip.{e.bestLoadKg !== null ? ` · max ${kg(e.bestLoadKg)}` : ''}
                       {e.previous ? `  (prima: ${e.previous.reps} rip.${e.previous.bestLoadKg !== null ? `, ${kg(e.previous.bestLoadKg)}` : ''})` : ''}
                     </Small>
+                    {e.sensor && (
+                      <Small style={{ color: colors.energia }}>
+                        Sensore: {velocity(e.sensor.avgVelocity)}
+                        {e.sensor.previousAvgVelocity !== null ? ` (prima ${velocity(e.sensor.previousAvgVelocity)})` : ''}
+                        {e.sensor.regularity !== null ? ` · regolarità ${Math.round(e.sensor.regularity)}` : ''}
+                      </Small>
+                    )}
                   </View>
                   <Text style={{ fontFamily: font.textSemi, fontSize: 13, color: t.color }} accessibilityLabel={t.label}>{t.symbol} {t.label}</Text>
                 </Row>

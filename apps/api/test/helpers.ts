@@ -3,6 +3,7 @@ import { buildApp } from '../src/app';
 import { loadConfig } from '../src/config';
 import { openDb, type DbHandle } from '../src/db/client';
 import { users } from '../src/db/schema';
+import { AiUnavailable, type AiClient, type SetAnalysis, type WeekDecision, type WeekInput } from '../src/lib/ai';
 import { DevMailer } from '../src/lib/mailer';
 import { hashPassword } from '../src/lib/password';
 import { MemoryStorage } from '../src/lib/storage';
@@ -13,9 +14,38 @@ export interface TestEnv {
   handle: DbHandle;
   mailer: DevMailer;
   clock: { now: Date };
+  ai: FakeAi;
   api: (method: string, url: string, body?: unknown, token?: string) => Promise<{ status: number; body: any }>;
   adminToken: string;
   close: () => Promise<void>;
+}
+
+/** Motore AI finto: i test decidono cosa risponde e possono leggerne l'ultima richiesta. */
+export class FakeAi implements AiClient {
+  down = false;
+  analysis: SetAnalysis = {
+    reps: 10,
+    quality: 'ok',
+    avgVelocity: 0.42,
+    peakVelocity: 0.71,
+    regularity: 88,
+    timeUnderTensionMs: 26000,
+    velocityLossPct: 12,
+    rangeM: 0.45,
+    perRep: Array.from({ length: 10 }, (_, i) => ({ startMs: i * 2600, durationMs: 2400, rangeM: 0.45, velocity: 0.42, peakVelocity: 0.7 })),
+  };
+  lastWeek: WeekInput | null = null;
+  decide: (week: WeekInput) => WeekDecision = (week) => ({ mode: 'hold', summary: ['Piano confermato.'], exercises: week.exercises.map((e) => ({ key: e.key, action: 'hold', sets: e.sets, reps: e.reps, loadKg: e.loadKg, reason: 'Resta uguale.' })) });
+
+  async analyzeSet() {
+    if (this.down) throw new AiUnavailable('spento nei test');
+    return this.analysis;
+  }
+  async adaptWeek(week: WeekInput) {
+    if (this.down) throw new AiUnavailable('spento nei test');
+    this.lastWeek = week;
+    return this.decide(week);
+  }
 }
 
 export const PASSWORD = 'Password-di-prova-1';
@@ -28,7 +58,8 @@ export async function createEnv(): Promise<TestEnv> {
   const mailer = new DevMailer();
   const clock = { now: new Date('2026-11-14T10:00:00Z') };
   const config = loadConfig({ NODE_ENV: 'test', JWT_SECRET: 'x'.repeat(40), PUBLIC_WEB_URL: 'https://motix.test' });
-  const app = await buildApp({ db: handle.db, config, mailer, storage: new MemoryStorage(), now: () => clock.now }, { rateLimit: false });
+  const ai = new FakeAi();
+  const app = await buildApp({ db: handle.db, config, mailer, storage: new MemoryStorage(), ai, now: () => clock.now }, { rateLimit: false });
 
   const api: TestEnv['api'] = async (method, url, body, token) => {
     const res = await app.inject({
@@ -49,7 +80,7 @@ export async function createEnv(): Promise<TestEnv> {
   });
   const login = await api('POST', '/auth/login', { email: 'admin@btech.test', password: PASSWORD });
 
-  return { app, handle, mailer, clock, api, adminToken: login.body.accessToken, close: async () => { await app.close(); await handle.close(); } };
+  return { app, handle, mailer, clock, ai, api, adminToken: login.body.accessToken, close: async () => { await app.close(); await handle.close(); } };
 }
 
 export const tokenFromLink = (link?: string) => new URL(link!).searchParams.get('token')!;

@@ -398,6 +398,8 @@ export const plans = pgTable(
     weekStart: date('week_start').notNull(),
     version: integer('version').notNull().default(1),
     rationale: text('rationale'),
+    /** Cosa è cambiato rispetto alla settimana prima (adattamento settimanale). */
+    changes: jsonb('changes').$type<string[]>(),
     status: planStatusEnum('status').notNull().default('active'),
     createdAt: createdAt(),
   },
@@ -452,6 +454,10 @@ export const sensors = pgTable(
     freeOfCharge: boolean('free_of_charge').notNull().default(false),
     status: sensorStatusEnum('status').notNull().default('in_stock'),
     pairedAt: ts('paired_at'),
+    /** Ultima volta che il sensore ha registrato una serie, con la carica letta in quel momento. */
+    lastSeenAt: ts('last_seen_at'),
+    batteryPct: integer('battery_pct'),
+    note: text('note'),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('sensors_serial_uq').on(t.serial)],
@@ -483,10 +489,28 @@ export const sensorReadings = pgTable(
     avgVelocity: numeric('avg_velocity', { precision: 6, scale: 3 }),
     regularity: numeric('regularity', { precision: 5, scale: 2 }),
     timeUnderTensionMs: integer('time_under_tension_ms'),
-    perRep: jsonb('per_rep').$type<Array<{ velocity: number; durationMs: number }>>(),
+    peakVelocity: numeric('peak_velocity', { precision: 6, scale: 3 }),
+    /** Quanto è calata la velocità tra le prime ripetizioni e l'ultima, in percentuale. */
+    velocityLossPct: numeric('velocity_loss_pct', { precision: 5, scale: 2 }),
+    rangeM: numeric('range_m', { precision: 5, scale: 3 }),
+    perRep: jsonb('per_rep').$type<Array<{ velocity: number; durationMs: number; rangeM?: number }>>(),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('sensor_readings_set_uq').on(t.setLogId)],
+);
+
+/** Segnalazioni di guasto di un sensore, da utenti e strutture. */
+export const sensorIssues = pgTable(
+  'sensor_issues',
+  {
+    id: id(),
+    sensorId: uuid('sensor_id').notNull().references(() => sensors.id, { onDelete: 'cascade' }),
+    reporterId: uuid('reporter_id').references(() => users.id, { onDelete: 'set null' }),
+    note: text('note').notNull(),
+    resolvedAt: ts('resolved_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('sensor_issues_sensor_idx').on(t.sensorId)],
 );
 
 /* ---------- Idratazione e misure ---------- */

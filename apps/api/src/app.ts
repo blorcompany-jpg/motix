@@ -16,6 +16,7 @@ import { messageRoutes } from './modules/messages';
 import { meRoutes } from './modules/me';
 import { mediaRoutes } from './modules/media';
 import { publicRoutes } from './modules/public';
+import { sensorRoutes } from './modules/sensors';
 import { structureRoutes } from './modules/structure';
 import { trainerRoutes } from './modules/trainer';
 import { trainingRoutes } from './modules/training';
@@ -61,6 +62,7 @@ export async function buildApp(ctx: AppCtx, opts: { logger?: boolean; rateLimit?
   await app.register(mediaRoutes);
   await app.register(communityRoutes);
   await app.register(commerceRoutes);
+  await app.register(sensorRoutes);
   await app.register(backofficeRoutes);
   await app.register(structureRoutes);
   await app.register(adminRoutes);

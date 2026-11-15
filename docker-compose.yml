@@ -9,5 +9,11 @@ services:
       POSTGRES_DB: motix
     ports: ["5432:5432"]
     volumes: ["motix-db:/var/lib/postgresql/data"]
+  # Motore AI: analisi del sensore e adattamento del piano. Lo chiama solo il backend.
+  ai:
+    build: ./services/ai
+    environment:
+      AI_SERVICE_KEY: ${AI_KEY:-}
+    ports: ["8000:8000"]
 volumes:
   motix-db:

@@ -14,6 +14,7 @@ import {
   type ProgressResponse,
 } from '@motix/shared';
 import { requireRole } from '../auth';
+import { rolloverPlan } from '../services/adaptation';
 import { hydrationGoals, hydrationLogs, measurements, plans, sportProfiles, subscriptions, workoutSessions } from '../db/schema';
 import { addDays, assertPlausibleDay, mondayOf } from '../lib/days';
 import { conflict, notFound, parse } from '../lib/errors';
@@ -157,6 +158,8 @@ export async function wellbeingRoutes(app: FastifyInstance) {
     const day = dayOf(req);
     const sub = await currentSubscription(ctx, userId);
     const premium = isPremium(sub);
+    // Se la settimana del piano è finita, si prepara quella nuova prima di cercare la prossima seduta.
+    await rolloverPlan(ctx, userId);
     const open = and(eq(workoutSessions.userId, userId), isNull(workoutSessions.completedAt));
     const [today] = await db.select({ id: workoutSessions.id }).from(workoutSessions).where(and(open, eq(workoutSessions.scheduledDate, day))).limit(1);
     const [next] = today

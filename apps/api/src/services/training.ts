@@ -7,11 +7,12 @@ import {
   type PlanSessionSummary,
   type SessionDetail,
   type SessionSummary,
+  type SetSensorData,
   type Trend,
 } from '@motix/shared';
 import type { AppCtx } from '../context';
 import type { Db } from '../db/client';
-import { clientLinks, exercises, plans, sessionExercises, setLogs, sportProfiles, trainerVideos, users, workoutSessions } from '../db/schema';
+import { clientLinks, exercises, plans, sensorReadings, sessionExercises, setLogs, sportProfiles, trainerVideos, users, workoutSessions } from '../db/schema';
 import { badRequest, notFound } from '../lib/errors';
 import { addDays, mondayOf } from '../lib/days';
 import { track } from './events';
@@ -37,8 +38,12 @@ export async function userSets(db: Db, userId: string, range: { from?: string; t
       setNumber: setLogs.setNumber,
       reps: setLogs.reps,
       loadKg: setLogs.loadKg,
+      unit: exercises.unit,
+      perceivedEffort: workoutSessions.perceivedEffort,
+      reading: sensorReadings,
     })
     .from(setLogs)
+    .leftJoin(sensorReadings, eq(sensorReadings.setLogId, setLogs.id))
     .innerJoin(sessionExercises, eq(sessionExercises.id, setLogs.sessionExerciseId))
     .innerJoin(workoutSessions, eq(workoutSessions.id, sessionExercises.sessionId))
     .innerJoin(exercises, eq(exercises.id, sessionExercises.exerciseId))
@@ -50,8 +55,39 @@ export async function userSets(db: Db, userId: string, range: { from?: string; t
       ),
     )
     .orderBy(asc(workoutSessions.scheduledDate), asc(setLogs.setNumber));
-  return rows.map((r) => ({ ...r, loadKg: num(r.loadKg), muscles: r.muscles as Muscle[] }));
+  return rows.map(({ reading, ...r }) => ({ ...r, loadKg: num(r.loadKg), muscles: r.muscles as Muscle[], sensor: sensorData(reading) }));
 }
+/** I dati del sensore di una serie, nel formato usato da app e sito. */
+export function sensorData(r: typeof sensorReadings.$inferSelect | null): SetSensorData | null {
+  if (!r) return null;
+  return {
+    avgVelocity: num(r.avgVelocity),
+    peakVelocity: num(r.peakVelocity),
+    regularity: num(r.regularity),
+    timeUnderTensionMs: r.timeUnderTensionMs,
+    velocityLossPct: num(r.velocityLossPct),
+    rangeM: num(r.rangeM),
+  };
+}
+
+const mean = (values: Array<number | null | undefined>, digits = 2) => {
+  const v = values.filter((x): x is number => typeof x === 'number');
+  return v.length ? Number((v.reduce((a, b) => a + b, 0) / v.length).toFixed(digits)) : null;
+};
+
+/** Medie dei dati del sensore su un gruppo di serie. */
+export function sensorAverages(sets: Array<{ sensor: SetSensorData | null }>) {
+  const read = sets.map((s) => s.sensor).filter((x): x is SetSensorData => x !== null);
+  if (!read.length) return null;
+  return {
+    sets: read.length,
+    avgVelocity: mean(read.map((r) => r.avgVelocity)),
+    regularity: mean(read.map((r) => r.regularity), 0),
+    velocityLossPct: mean(read.map((r) => r.velocityLossPct), 0),
+    timeUnderTensionMs: read.reduce((n, r) => n + (r.timeUnderTensionMs ?? 0), 0),
+  };
+}
+
 export type UserSet = Awaited<ReturnType<typeof userSets>>[number];
 
 export const volumeOf = (sets: Array<{ reps: number; loadKg: number | null }>) =>
@@ -144,6 +180,8 @@ export interface PlanToSave {
   trainerId: string | null;
   weekStart: string;
   rationale: string[];
+  /** Cosa cambia rispetto alla settimana prima (adattamento settimanale). */
+  changes?: string[];
   sessions: Array<{ title: string; day: string; exercises: Array<{ exerciseId: string; sets: number; reps: number; restSeconds: number; loadKg: number | null }> }>;
 }
 
@@ -171,6 +209,7 @@ export async function savePlan(db: Db, input: PlanToSave) {
         weekStart: input.weekStart,
         version: Math.max(0, ...previous.map((p) => p.version)) + 1,
         rationale: JSON.stringify(input.rationale),
+        changes: input.changes?.length ? input.changes : null,
       })
       .returning();
     for (const s of input.sessions) {
@@ -246,8 +285,9 @@ export async function sessionDetail(db: Db, userId: string, sessionId: string): 
     .orderBy(asc(sessionExercises.position));
   const logs = items.length
     ? await db
-        .select()
+        .select({ l: setLogs, reading: sensorReadings })
         .from(setLogs)
+        .leftJoin(sensorReadings, eq(sensorReadings.setLogId, setLogs.id))
         .where(inArray(setLogs.sessionExerciseId, items.map((i) => i.se.id)))
         .orderBy(asc(setLogs.setNumber))
     : [];
@@ -294,8 +334,8 @@ export async function sessionDetail(db: Db, userId: string, sessionId: string): 
       targetLoadKg: num(se.targetLoadKg),
       restSeconds: se.restSeconds ?? 60,
       logs: logs
-        .filter((l) => l.sessionExerciseId === se.id)
-        .map((l) => ({ id: l.id, setNumber: l.setNumber, reps: l.reps, loadKg: num(l.loadKg), source: l.source })),
+        .filter(({ l }) => l.sessionExerciseId === se.id)
+        .map(({ l, reading }) => ({ id: l.id, setNumber: l.setNumber, reps: l.reps, loadKg: num(l.loadKg), source: l.source, sensor: sensorData(reading) })),
       previous: previousOf(ex.id),
     })),
   };
@@ -351,6 +391,9 @@ export async function sessionSummary(db: Db, userId: string, sessionId: string):
     volumeLastWeek: volumeOf(twoWeeks.filter((r) => !inThis(r.day))),
   };
 
+  const sensorHistory = all.some((l) => l.sensor)
+    ? (await userSets(db, userId, { from: addDays(s.scheduledDate, -120), to: s.scheduledDate })).filter((r) => r.sessionId !== sessionId && r.sensor)
+    : [];
   const exerciseRows = detail.exercises
     .filter((e) => e.logs.length > 0)
     .map((e) => {
@@ -363,8 +406,22 @@ export async function sessionSummary(db: Db, userId: string, sessionId: string):
         const before = e.exercise.loadable && p.bestLoadKg !== null ? volumeOf(e.previous!.sets) : p.reps;
         trend = now > before * 1.02 ? 'up' : now < before * 0.98 ? 'down' : 'same';
       }
-      return { name: e.exercise.name, sets: e.logs.length, reps, bestLoadKg: best, previous: p, trend };
+      const sensor = sensorAverages(e.logs);
+      // Velocità dell'ultima volta in cui lo stesso esercizio è stato fatto con il sensore.
+      const before = sensorHistory.filter((h) => h.exerciseId === e.exercise.id);
+      const lastSession = before.at(-1)?.sessionId;
+      const previousAvgVelocity = lastSession ? (sensorAverages(before.filter((h) => h.sessionId === lastSession))?.avgVelocity ?? null) : null;
+      return {
+        name: e.exercise.name,
+        sets: e.logs.length,
+        reps,
+        bestLoadKg: best,
+        previous: p,
+        trend,
+        sensor: sensor ? { sets: sensor.sets, avgVelocity: sensor.avgVelocity, regularity: sensor.regularity, velocityLossPct: sensor.velocityLossPct, previousAvgVelocity } : null,
+      };
     });
+  const sensorTotals = sensorAverages(all);
 
   const tips: string[] = [];
   const effort = s.perceivedEffort;
@@ -379,6 +436,13 @@ export async function sessionSummary(db: Db, userId: string, sessionId: string):
   }
   const down = exerciseRows.find((e) => e.trend === 'down');
   if (down) tips.push(`${down.name}: hai fatto meno della volta scorsa. Capita: controlla recupero e sonno.`);
+  // Consigli dai dati del sensore.
+  const tired = exerciseRows.find((e) => (e.sensor?.velocityLossPct ?? 0) > 35);
+  if (tired) tips.push(`${tired.name}: il sensore ha visto le ultime ripetizioni molto più lente delle prime. Tieni questo carico finché non restano fluide.`);
+  const uneven = exerciseRows.find((e) => e.sensor?.regularity !== null && e.sensor?.regularity !== undefined && e.sensor.regularity < 60);
+  if (uneven && uneven !== tired) tips.push(`${uneven.name}: ripetizioni poco regolari. Cerca lo stesso ritmo e la stessa ampiezza in ogni ripetizione.`);
+  const faster = exerciseRows.find((e) => e.sensor?.avgVelocity && e.sensor.previousAvgVelocity && e.sensor.avgVelocity > e.sensor.previousAvgVelocity * 1.05 && e.trend !== 'down');
+  if (faster) tips.push(`${faster.name}: movimento più veloce della volta scorsa a parità di lavoro. Stai migliorando.`);
   const planned = detail.exercises.reduce((n, e) => n + e.targetSets, 0);
   if (totals.sets < planned) tips.push(`Hai registrato ${totals.sets} serie su ${planned}: se il tempo è poco, riduci i giorni o il livello nel questionario.`);
   tips.push('Bevi nelle prossime due ore per recuperare i liquidi persi.');
@@ -393,6 +457,7 @@ export async function sessionSummary(db: Db, userId: string, sessionId: string):
     previous,
     week,
     exercises: exerciseRows,
+    sensor: sensorTotals ? { sets: sensorTotals.sets, avgVelocity: sensorTotals.avgVelocity, regularity: sensorTotals.regularity, timeUnderTensionMs: sensorTotals.timeUnderTensionMs } : null,
     tips,
   };
 }

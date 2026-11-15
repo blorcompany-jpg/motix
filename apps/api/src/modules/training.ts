@@ -6,17 +6,22 @@ import {
   daySchema,
   freeSessionSchema,
   logSetSchema,
+  sensorSetSchema,
   sportProfileSchema,
   type Limitation,
   type Muscle,
   type PlanResponse,
+  type SensorSetResponse,
   type SportProfile,
 } from '@motix/shared';
 import { requireRole } from '../auth';
-import { exercises, measurements, plans, sessionExercises, setLogs, sportProfiles, trainers, users, workoutSessions } from '../db/schema';
+import { exercises, measurements, plans, sensorReadings, sensors, sessionExercises, setLogs, sportProfiles, trainers, users, workoutSessions } from '../db/schema';
+import { AiUnavailable } from '../lib/ai';
 import { assertPlausibleDay, toDay } from '../lib/days';
-import { conflict, forbidden, notFound, parse } from '../lib/errors';
+import { AppError, badRequest, conflict, forbidden, notFound, parse } from '../lib/errors';
+import { rolloverPlan } from '../services/adaptation';
 import { track } from '../services/events';
+import { usableSensors } from '../services/sensors';
 import { hasPremium } from '../services/subscription';
 import { generatePlan, ownSession, sessionDetail, sessionSummaries, sessionSummary } from '../services/training';
 
@@ -101,6 +106,8 @@ export async function trainingRoutes(app: FastifyInstance) {
 
   /* ---------- Piano ---------- */
   const readPlan = async (userId: string): Promise<PlanResponse> => {
+    // Se la settimana è finita, il piano si aggiorna prima di essere mostrato.
+    await rolloverPlan(ctx, userId);
     const [plan] = await db
       .select()
       .from(plans)
@@ -136,7 +143,9 @@ export async function trainingRoutes(app: FastifyInstance) {
         author: plan.author,
         trainerName,
         weekStart: plan.weekStart,
+        version: plan.version,
         rationale,
+        changes: plan.changes ?? [],
         sessions: sessions.map((s) => summaries.get(s.id)!).filter(Boolean),
       },
     };
@@ -218,7 +227,82 @@ export async function trainingRoutes(app: FastifyInstance) {
     return sessionDetail(db, userId, id);
   });
 
-  /** Registra o corregge una serie (a mano; dal sensore nella tappa dedicata). */
+  /**
+   * Registra una serie letta dal sensore motix pod: l'app manda le accelerazioni, il motore AI conta le
+   * ripetizioni e misura velocità e regolarità. Il sensore è una funzione Premium (sezione 3.1).
+   */
+  app.post('/me/sessions/:id/sets/sensor', { bodyLimit: 6 * 1024 * 1024 }, async (req): Promise<SensorSetResponse> => {
+    const userId = me(req);
+    const { id } = parse(idParam, req.params);
+    const input = parse(sensorSetSchema, req.body);
+    if (!(await hasPremium(ctx, userId))) throw forbidden('Il sensore motix pod è incluso in Premium', 'premium_required');
+    const s = await ownSession(db, userId, id);
+    if (s.completedAt) throw conflict('session_completed', 'Questa seduta è già stata completata');
+    const [se] = await db
+      .select({ id: sessionExercises.id, unit: exercises.unit, loadable: exercises.loadable })
+      .from(sessionExercises)
+      .innerJoin(exercises, eq(exercises.id, sessionExercises.exerciseId))
+      .where(and(eq(sessionExercises.id, input.sessionExerciseId), eq(sessionExercises.sessionId, id)))
+      .limit(1);
+    if (!se) throw notFound('Esercizio non trovato in questa seduta');
+    if (se.unit !== 'reps') throw badRequest('not_countable', 'Il sensore conta le ripetizioni: per gli esercizi a tempo registra la serie a mano');
+    const sensor = (await usableSensors(db, userId)).find((x) => x.id === input.sensorId);
+    if (!sensor) throw forbidden('Questo sensore non è abbinato al tuo account', 'sensor_not_paired');
+
+    let analysis;
+    try {
+      analysis = await ctx.ai.analyzeSet({ sampleRateHz: input.sampleRateHz, ax: input.ax, ay: input.ay, az: input.az });
+    } catch (e) {
+      if (!(e instanceof AiUnavailable)) throw e;
+      req.log.warn(e.message);
+      throw new AppError(503, 'analysis_unavailable', 'L’analisi del sensore non è disponibile in questo momento: registra la serie a mano');
+    }
+    if (analysis.quality !== 'ok' || analysis.reps < 1)
+      throw badRequest('no_reps', 'Il sensore non ha rilevato ripetizioni: controlla che sia fissato bene e riprova, oppure registra la serie a mano');
+
+    const now = ctx.now();
+    const loadKg = !se.loadable || input.loadKg === undefined || input.loadKg === null ? null : String(input.loadKg);
+    const fixed = (n: number | null, digits: number) => (n === null ? null : n.toFixed(digits));
+    await db.transaction(async (tx) => {
+      if (!s.startedAt) await tx.update(workoutSessions).set({ startedAt: now }).where(eq(workoutSessions.id, id));
+      const [log] = await tx
+        .insert(setLogs)
+        .values({ sessionExerciseId: se.id, setNumber: input.setNumber, reps: analysis.reps, loadKg, source: 'sensor', recordedAt: now })
+        .onConflictDoUpdate({ target: [setLogs.sessionExerciseId, setLogs.setNumber], set: { reps: analysis.reps, loadKg, source: 'sensor', recordedAt: now } })
+        .returning({ id: setLogs.id });
+      const reading = {
+        sensorId: sensor.id,
+        reps: analysis.reps,
+        avgVelocity: fixed(analysis.avgVelocity, 3),
+        peakVelocity: fixed(analysis.peakVelocity, 3),
+        regularity: fixed(analysis.regularity, 2),
+        timeUnderTensionMs: analysis.timeUnderTensionMs,
+        velocityLossPct: fixed(analysis.velocityLossPct, 2),
+        rangeM: fixed(analysis.rangeM, 3),
+        perRep: analysis.perRep.slice(0, 200).map((r) => ({ velocity: r.velocity, durationMs: r.durationMs, rangeM: r.rangeM })),
+      };
+      await tx.insert(sensorReadings).values({ setLogId: log!.id, ...reading }).onConflictDoUpdate({ target: sensorReadings.setLogId, set: reading });
+      await tx
+        .update(sensors)
+        .set({ lastSeenAt: now, ...(input.batteryPct !== undefined ? { batteryPct: input.batteryPct } : {}), ...(input.firmware ? { firmware: input.firmware } : {}) })
+        .where(eq(sensors.id, sensor.id));
+    });
+    await track(db, 'serie_registrata_sensore', { userId, structureId: sensor.ownerStructureId }, { reps: analysis.reps });
+    return {
+      session: await sessionDetail(db, userId, id),
+      analysis: {
+        reps: analysis.reps,
+        avgVelocity: analysis.avgVelocity,
+        peakVelocity: analysis.peakVelocity,
+        regularity: analysis.regularity,
+        timeUnderTensionMs: analysis.timeUnderTensionMs,
+        velocityLossPct: analysis.velocityLossPct,
+        rangeM: analysis.rangeM,
+      },
+    };
+  });
+
+  /** Registra o corregge una serie a mano. */
   app.put('/me/sessions/:id/sets', async (req) => {
     const userId = me(req);
     const { id } = parse(idParam, req.params);

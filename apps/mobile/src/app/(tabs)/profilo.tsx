@@ -93,6 +93,16 @@ export default function Profilo() {
       )}
 
       {isUser && (
+        <Pressable onPress={() => router.push('/sensore')} accessibilityRole="button" accessibilityLabel="Sensore motix pod">
+          <Card>
+            <H3>Sensore motix pod</H3>
+            <Small style={{ color: colors.nebbia }}>Conta le ripetizioni e misura velocità e regolarità.</Small>
+            <Small style={{ color: colors.acqua }}>Abbina o gestisci ›</Small>
+          </Card>
+        </Pressable>
+      )}
+
+      {isUser && (
         <Card>
           <H3>La mia struttura</H3>
           {user.structure ? (

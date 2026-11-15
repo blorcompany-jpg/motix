@@ -52,6 +52,7 @@ export const Stat = ({ value, label }: { value: ReactNode; label: string }) => (
 export const date = (v: string | null | undefined) => (v ? new Date(v).toLocaleDateString('it-IT') : '—');
 
 
+const ms = (v: number | null) => (v === null ? '—' : `${v.toFixed(2).replace('.', ',')} m/s`);
 export const kg = (n: number) => `${n.toLocaleString('it-IT', { maximumFractionDigits: 1 })} kg`;
 export const shortDay = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
 
@@ -141,6 +142,35 @@ export function ReportView({ report: r }: { report: ClientReport }) {
             </table>
           ) : <div className="empty">Servono almeno due sedute con lo stesso esercizio.</div>}
         </div>
+      </div>
+      <div className="card flat stack tight">
+        <div className="row between">
+          <h3>Sensore motix pod</h3>
+          <span className="muted">{r.sensor.sets} serie su {r.sensor.totalSets} registrate con il sensore</span>
+        </div>
+        {r.sensor.exercises.length ? (
+          <table>
+            <thead><tr><th>Esercizio</th><th>Serie</th><th>Velocità media</th><th>Regolarità</th><th>Ultimo carico</th></tr></thead>
+            <tbody>
+              {r.sensor.exercises.map((e) => {
+                const delta = e.firstVelocity && e.lastVelocity ? Math.round(((e.lastVelocity - e.firstVelocity) / e.firstVelocity) * 100) : 0;
+                return (
+                  <tr key={e.exercise}>
+                    <td>{e.exercise}</td>
+                    <td>{e.sets}</td>
+                    <td>
+                      {ms(e.lastVelocity)}
+                      {delta !== 0 && <span style={{ color: delta > 0 ? 'var(--energia)' : 'var(--corallo)' }}> ({delta > 0 ? '+' : ''}{delta}% dalla prima seduta)</span>}
+                    </td>
+                    <td>{e.regularity !== null ? `${Math.round(e.regularity)} su 100` : '—'}</td>
+                    <td>{e.lastLoadKg !== null ? kg(e.lastLoadKg) : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : <div className="empty">Nessuna serie registrata con il sensore nel periodo.</div>}
+        {r.sensor.exercises.length > 0 && <p className="muted">Velocità più alta a parità di carico vuol dire più forza; se cala molto, il carico è al limite.</p>}
       </div>
     </div>
   );

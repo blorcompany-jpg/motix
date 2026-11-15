@@ -11,6 +11,9 @@ export interface Config {
   mediaDir: string;
   corsOrigins: string[];
   mailFrom: string;
+  /** Indirizzo del motore AI (services/ai). Senza, le funzioni che lo usano ripiegano o avvisano. */
+  aiUrl: string | null;
+  aiKey: string | null;
   isProduction: boolean;
 }
 
@@ -30,6 +33,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mediaDir: env.MEDIA_DIR ?? './.data/media',
     corsOrigins: (env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:8081').split(',').map((s) => s.trim()),
     mailFrom: env.MAIL_FROM ?? 'MOTIX <no-reply@motix.app>',
+    aiUrl: env.AI_URL ? env.AI_URL.replace(/\/$/, '') : null,
+    aiKey: env.AI_KEY || null,
     isProduction,
   };
 }

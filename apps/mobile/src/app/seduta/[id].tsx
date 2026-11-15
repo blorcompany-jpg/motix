@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, Vibration, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { MUSCLE_LABELS, type SessionDetail, type SessionExerciseDetail, type SessionSummary } from '@motix/shared';
+import { MUSCLE_LABELS, type SensorsResponse, type SessionDetail, type SessionExerciseDetail, type SessionSummary } from '@motix/shared';
 import { Body, Button, Card, Chip, ChipRow, ErrorBox, Eyebrow, H2, H3, Loading, Pill, Row, Screen, Small, TopBar } from '@/components/ui';
+import { SensorSet } from '@/components/sensorSet';
 import { api } from '@/lib/api';
 import { shortDate } from '@/lib/dates';
+import { pod, velocity } from '@/lib/pod';
 import { colors, font, radii } from '@/lib/theme';
 import { useApi } from '@/lib/useApi';
 
@@ -18,17 +20,20 @@ function SetRow({
   ex,
   n,
   disabled,
+  initialReps,
   onSave,
 }: {
   ex: SessionExerciseDetail;
   n: number;
   disabled: boolean;
+  /** Ripetizioni contate dal sensore quando la serie viene poi registrata a mano. */
+  initialReps?: number;
   onSave: (reps: number, loadKg: number | null) => Promise<void>;
 }) {
   const log = ex.logs.find((l) => l.setNumber === n);
   // Carico proposto: quello dell'ultima serie fatta oggi, poi l'obiettivo del piano, poi la volta precedente.
   const suggested = ex.logs.at(-1)?.loadKg ?? ex.targetLoadKg ?? ex.previous?.sets[0]?.loadKg ?? null;
-  const [reps, setReps] = useState(String(log?.reps ?? ex.targetReps));
+  const [reps, setReps] = useState(String(log?.reps ?? (initialReps || ex.targetReps)));
   const [load, setLoad] = useState(fmt(log ? log.loadKg : suggested));
   useEffect(() => {
     // Una serie non ancora fatta e senza carico scritto eredita quello appena usato.
@@ -48,6 +53,7 @@ function SetRow({
 
   const input = { fontFamily: font.textSemi, fontSize: 16, color: colors.ghiaccio, backgroundColor: colors.notte, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.blu, minHeight: 44, textAlign: 'center' as const, width: 64, minWidth: 0, paddingHorizontal: 4 };
   return (
+    <View style={{ gap: 4 }}>
     <Row style={{ gap: 6 }}>
       <Text style={{ width: 16, fontFamily: font.displaySemi, fontSize: 15, color: done ? colors.energia : colors.nebbia }}>{n}</Text>
       <TextInput value={reps} onChangeText={setReps} keyboardType="number-pad" maxLength={3} editable={!disabled} style={input} accessibilityLabel={`Serie ${n}: ${UNIT[ex.exercise.unit]}`} />
@@ -68,6 +74,12 @@ function SetRow({
         <Text style={{ fontFamily: font.textSemi, fontSize: 14, color: done ? colors.energia : colors.notte }}>{done ? '✓ Fatta' : dirty ? 'Salva' : 'Fatto'}</Text>
       </Pressable>
     </Row>
+    {log?.sensor && (
+      <Small style={{ color: colors.energia, marginLeft: 22 }}>
+        Sensore · {velocity(log.sensor.avgVelocity)}{log.sensor.regularity !== null ? ` · regolarità ${Math.round(log.sensor.regularity)}` : ''}
+      </Small>
+    )}
+    </View>
   );
 }
 
@@ -82,6 +94,12 @@ export default function Seduta() {
   const [effort, setEffort] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const opened = useRef(false);
+  // Sensore: quali posso usare e su quale serie è aperto il pannello.
+  const sensors = useApi<SensorsResponse>('/me/sensors');
+  const [withSensor, setWithSensor] = useState<{ exerciseId: string; setNumber: number } | null>(null);
+  const [counted, setCounted] = useState<{ key: string; reps: number } | null>(null);
+  const canUseSensor = pod.available && Boolean(sensors.data?.premium) && (sensors.data?.sensors.length ?? 0) > 0;
+  const startRest = (seconds: number) => seconds > 0 && setRest({ endsAt: Date.now() + seconds * 1000, total: seconds });
 
   // All'apertura si espande il primo esercizio non ancora completato.
   useEffect(() => {
@@ -228,8 +246,47 @@ export default function Seduta() {
                   </Small>
                 )}
                 {Array.from({ length: rows }, (_, i) => i + 1).map((n) => (
-                  <SetRow key={`${ex.id}-${n}-${ex.logs.find((l) => l.setNumber === n)?.id ?? 'new'}`} ex={ex} n={n} disabled={completed} onSave={(r, l) => saveSet(ex, n, r, l)} />
+                  <SetRow
+                    key={`${ex.id}-${n}-${ex.logs.find((l) => l.setNumber === n)?.id ?? 'new'}-${counted?.key === `${ex.id}-${n}` ? counted.reps : ''}`}
+                    ex={ex}
+                    n={n}
+                    disabled={completed}
+                    initialReps={counted?.key === `${ex.id}-${n}` ? counted.reps : undefined}
+                    onSave={(r, l) => saveSet(ex, n, r, l)}
+                  />
                 ))}
+                {(() => {
+                  // Il sensore registra la prossima serie non ancora fatta, solo per gli esercizi a ripetizioni.
+                  const nextSet = ex.logs.length + 1;
+                  if (completed || !canUseSensor || ex.exercise.unit !== 'reps' || nextSet > 20) return null;
+                  if (withSensor?.exerciseId === ex.id)
+                    return (
+                      <SensorSet
+                        sessionId={id}
+                        ex={ex}
+                        setNumber={withSensor.setNumber}
+                        sensors={sensors.data!.sensors}
+                        suggestedLoad={ex.logs.at(-1)?.loadKg ?? ex.targetLoadKg ?? ex.previous?.sets[0]?.loadKg ?? null}
+                        onSaved={(next) => {
+                          setData(next);
+                          startRest(ex.restSeconds);
+                        }}
+                        onClose={() => {
+                          setWithSensor(null);
+                          const updated = data.exercises.find((e) => e.id === ex.id);
+                          if (updated && updated.logs.length >= updated.targetSets) {
+                            const following = data.exercises.find((e) => e.position > updated.position && e.logs.length < e.targetSets);
+                            if (following) setOpen(following.id);
+                          }
+                        }}
+                        onManual={(reps) => {
+                          setCounted({ key: `${ex.id}-${withSensor.setNumber}`, reps });
+                          setWithSensor(null);
+                        }}
+                      />
+                    );
+                  return <Button title={`Serie ${nextSet} con il sensore`} variant="ghost" onPress={() => setWithSensor({ exerciseId: ex.id, setNumber: nextSet })} />;
+                })()}
               </View>
             )}
           </Card>

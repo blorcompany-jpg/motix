@@ -5,13 +5,14 @@ import { useAuth } from '../auth';
 import { Badge, ErrorBox, Field, Logo } from '../ui';
 import { Stat, Tabs, date, useLoad } from './dashboard/common';
 import { Moderation, RewardsAdmin, ShopAdmin } from './dashboard/AdminExtras';
+import { SensorsAdmin } from './dashboard/Sensors';
 import { StructureDashboard } from './dashboard/Owner';
 import { TrainerArea } from './dashboard/Trainer';
 
 /* ================= Pannello BTECH ================= */
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'structures' | 'trainers' | 'users' | 'moderation' | 'shop' | 'rewards'>('structures');
+  const [tab, setTab] = useState<'structures' | 'trainers' | 'users' | 'sensors' | 'moderation' | 'shop' | 'rewards'>('structures');
   const [filter, setFilter] = useState('pending');
   const overview = useLoad<any>('/admin/overview');
   const structures = useLoad<{ structures: any[] }>(tab === 'structures' ? `/admin/structures${filter ? `?status=${filter}` : ''}` : null);
@@ -70,7 +71,7 @@ function AdminPanel() {
         <Stat value={o?.users ?? 0} label="Utenti registrati" />
         <Stat value={o?.subscriptions?.active ?? 0} label={`Abbonati · ${o?.subscriptions?.trial ?? 0} in prova`} />
       </div>
-      <Tabs tabs={{ structures: 'Strutture', trainers: 'Personal trainer', users: 'Utenti', moderation: 'Moderazione', shop: 'Shop', rewards: 'Punti e premi' }} value={tab} onChange={setTab} />
+      <Tabs tabs={{ structures: 'Strutture', trainers: 'Personal trainer', users: 'Utenti', sensors: 'Sensori', moderation: 'Moderazione', shop: 'Shop', rewards: 'Punti e premi' }} value={tab} onChange={setTab} />
       <ErrorBox error={error ?? structures.error ?? trainers.error} />
 
       {tab === 'structures' && (
@@ -121,6 +122,7 @@ function AdminPanel() {
         </div>
       )}
 
+      {tab === 'sensors' && <SensorsAdmin />}
       {tab === 'moderation' && <Moderation />}
       {tab === 'shop' && <ShopAdmin />}
       {tab === 'rewards' && <RewardsAdmin />}

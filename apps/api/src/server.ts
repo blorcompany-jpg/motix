@@ -1,6 +1,7 @@
 import { buildApp } from './app';
 import { loadConfig } from './config';
 import { openDb } from './db/client';
+import { createAiClient } from './lib/ai';
 import { DevMailer } from './lib/mailer';
 import { LocalStorage } from './lib/storage';
 import { ensureExerciseLibrary, ensureShopCatalog } from './services/library';
@@ -19,6 +20,7 @@ const app = await buildApp(
     mailer: new DevMailer((msg) => console.log(msg)),
     // TODO produzione: archivio a oggetti con CDN in UE al posto del disco locale.
     storage: new LocalStorage(config.mediaDir),
+    ai: createAiClient(config),
     now: () => new Date(),
   },
   { logger: true },

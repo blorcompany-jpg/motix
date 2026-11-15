@@ -150,3 +150,18 @@ export const MAX_IMAGE_MB = 10;
 export const MAX_VIDEO_MB = 80;
 /** Punti assegnati al personal trainer, modificabili da BTECH dal pannello. */
 export const DEFAULT_POINT_RULES = { subscription: 100, renewal: 50 } as const;
+
+/* ---------- Sensore motix pod ---------- */
+/** Numero di serie del sensore: «MP-» seguito da 6-12 lettere o cifre. */
+export const SENSOR_SERIAL = /^MP-[A-Z0-9]{6,12}$/;
+export const SENSOR_STATUSES = ['in_stock', 'active', 'faulty', 'retired'] as const;
+export type SensorStatus = (typeof SENSOR_STATUSES)[number];
+export const SENSOR_STATUS_LABELS: Record<SensorStatus, string> = {
+  in_stock: 'In magazzino',
+  active: 'In uso',
+  faulty: 'Guasto',
+  retired: 'Ritirato',
+};
+/** Durata massima di una serie registrata dal sensore. */
+export const SENSOR_MAX_SECONDS = 300;
+export const SENSOR_MAX_SAMPLES = 30_000;

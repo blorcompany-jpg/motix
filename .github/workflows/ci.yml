@@ -13,10 +13,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: services/ai/requirements-dev.txt
       - run: npm ci
+      - name: Librerie del motore AI
+        run: pip install -r services/ai/requirements-dev.txt
+      - name: Test del motore AI
+        run: python -m pytest -q
+        working-directory: services/ai
       - name: Controllo dei tipi
         run: npm run typecheck
-      - name: Test dell'API
+      - name: Test dell'API (compresa la prova con il motore AI vero)
         run: npm test
       - name: Build del sito
         run: npm run build -w @motix/web

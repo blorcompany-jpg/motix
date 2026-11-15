@@ -6,7 +6,7 @@ import { addDays, mondayOf, toDay } from '../lib/days';
 import { notFound } from '../lib/errors';
 import { riskFor } from './risk';
 import { currentSubscription } from './subscription';
-import { userSets, volumeOf } from './training';
+import { sensorAverages, userSets, volumeOf } from './training';
 
 /** Report di un utente per il personal trainer o la struttura. Chi chiama deve aver già verificato il consenso. */
 export async function clientReport(ctx: AppCtx, userId: string, days = 28): Promise<ClientReport> {
@@ -108,6 +108,26 @@ export async function clientReport(ctx: AppCtx, userId: string, days = 28): Prom
       .slice(0, 5)
       .map(([exercise, pts]) => ({ exercise, firstKg: pts[0]!.kg, lastKg: pts.at(-1)!.kg })),
     weight,
+    sensor: {
+      sets: sets.filter((x) => x.sensor).length,
+      totalSets: sets.length,
+      exercises: [...new Set(sets.filter((x) => x.sensor).map((x) => x.exercise))]
+        .map((exercise) => {
+          const mine = sets.filter((x) => x.exercise === exercise && x.sensor);
+          const days = [...new Set(mine.map((x) => x.day))];
+          const ofDay = (d: string) => sensorAverages(mine.filter((x) => x.day === d));
+          return {
+            exercise,
+            sets: mine.length,
+            firstVelocity: ofDay(days[0]!)?.avgVelocity ?? null,
+            lastVelocity: ofDay(days.at(-1)!)?.avgVelocity ?? null,
+            regularity: sensorAverages(mine)?.regularity ?? null,
+            lastLoadKg: mine.at(-1)?.loadKg ?? null,
+          };
+        })
+        .sort((a, b) => b.sets - a.sets)
+        .slice(0, 8),
+    },
     hydration: {
       averageMl: tracked.length ? Math.round(tracked.reduce((n, t) => n + t.total, 0) / tracked.length) : 0,
       daysOnTarget: tracked.filter((t) => t.total >= t.goal).length,

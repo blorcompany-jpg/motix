@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ACQUISITION_CHANNELS, CONSENT_TYPES, STRUCTURE_TYPES } from './constants';
+import { ACQUISITION_CHANNELS, CONSENT_TYPES, STRUCTURE_TYPES, SENSOR_MAX_SAMPLES, SENSOR_MAX_SECONDS, SENSOR_SERIAL, SENSOR_STATUSES } from './constants';
 
 const email = z.string().trim().toLowerCase().email('Email non valida');
 const password = z
@@ -245,3 +245,51 @@ export const rewardSchema = z.object({
 });
 
 export const pointRulesSchema = z.object({ subscription: z.number().int().min(0).max(100000), renewal: z.number().int().min(0).max(100000) });
+
+/* ---------- Sensore motix pod ---------- */
+const serial = z
+  .string()
+  .trim()
+  .transform((v) => v.toUpperCase())
+  .pipe(z.string().regex(SENSOR_SERIAL, 'Il numero di serie è scritto sul sensore: MP- seguito da lettere e cifre'));
+
+export const pairSensorSchema = z.object({ serial });
+
+export const sensorIssueSchema = z.object({ note: z.string().trim().min(5, 'Descrivi il problema').max(500) });
+
+const axis = z.array(z.number().finite().min(-160).max(160)).min(1).max(SENSOR_MAX_SAMPLES);
+
+/** Una serie registrata dal sensore: accelerazioni sui tre assi in m/s², gravità compresa. */
+export const sensorSetSchema = z
+  .object({
+    sessionExerciseId: z.string().uuid(),
+    setNumber: z.number().int().min(1).max(20),
+    sensorId: z.string().uuid(),
+    loadKg: z.number().min(0).max(500).nullable().optional(),
+    sampleRateHz: z.number().min(20).max(200),
+    ax: axis,
+    ay: axis,
+    az: axis,
+    batteryPct: z.number().int().min(0).max(100).optional(),
+    firmware: z.string().trim().max(30).optional(),
+  })
+  .refine((v) => v.ax.length === v.ay.length && v.ay.length === v.az.length, { message: 'I tre assi devono avere gli stessi campioni', path: ['ax'] })
+  .refine((v) => v.ax.length / v.sampleRateHz <= SENSOR_MAX_SECONDS, { message: 'Serie troppo lunga', path: ['ax'] });
+
+export const adminSensorsSchema = z
+  .object({
+    serials: z.array(serial).min(1).max(200),
+    firmware: z.string().trim().max(30).optional(),
+    structureId: z.string().uuid().nullable().optional(),
+    freeOfCharge: z.boolean().default(false),
+  })
+  .refine((v) => new Set(v.serials).size === v.serials.length, { message: 'Ci sono numeri di serie ripetuti', path: ['serials'] });
+
+export const adminSensorPatchSchema = z.object({
+  status: z.enum(SENSOR_STATUSES).optional(),
+  firmware: z.string().trim().max(30).nullable().optional(),
+  /** Struttura a cui è assegnato; null lo riporta a BTECH. */
+  structureId: z.string().uuid().nullable().optional(),
+  freeOfCharge: z.boolean().optional(),
+  note: z.string().trim().max(300).nullable().optional(),
+});
