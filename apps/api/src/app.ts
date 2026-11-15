@@ -1,6 +1,7 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { registerAuth } from './auth';
 import type { AppCtx } from './context';
@@ -22,11 +23,36 @@ import { trainerRoutes } from './modules/trainer';
 import { trainingRoutes } from './modules/training';
 import { wellbeingRoutes } from './modules/wellbeing';
 
-export async function buildApp(ctx: AppCtx, opts: { logger?: boolean; rateLimit?: boolean } = {}) {
+export interface AppOptions {
+  logger?: boolean;
+  rateLimit?: boolean;
+  /**
+   * Ambiente «tutto in uno»: lo stesso server distribuisce anche il sito (su /sito) e l'app in versione web (su /app),
+   * e l'API risponde sotto /api. Serve per l'ambiente di prova; in produzione sito e app stanno su servizi separati.
+   */
+  hosted?: { webDir: string; appDir: string; home: string };
+}
+
+export async function buildApp(ctx: AppCtx, opts: AppOptions = {}) {
   const app = Fastify({ logger: opts.logger ?? false, trustProxy: true });
   app.decorate('ctx', ctx);
+  const prefix = opts.hosted ? '/api' : '';
 
-  await app.register(helmet);
+  await app.register(
+    helmet,
+    opts.hosted
+      ? {
+          contentSecurityPolicy: {
+            directives: {
+              // Anteprime di foto e video scelti dal telefono, e file caricati.
+              'img-src': ["'self'", 'data:', 'blob:'],
+              'media-src': ["'self'", 'blob:'],
+              'upgrade-insecure-requests': null,
+            },
+          },
+        }
+      : {},
+  );
   await app.register(cors, {
     origin: ctx.config.corsOrigins,
     credentials: true,
@@ -45,26 +71,44 @@ export async function buildApp(ctx: AppCtx, opts: { logger?: boolean; rateLimit?
     req.log.error(err);
     return reply.code(500).send({ error: { code: 'internal_error', message: 'Si è verificato un errore: riprova' } });
   });
-  app.setNotFoundHandler((_req, reply) =>
-    reply.code(404).send({ error: { code: 'not_found', message: 'Risorsa non trovata' } }),
-  );
+
+  if (opts.hosted) {
+    const { webDir, appDir, home } = opts.hosted;
+    await app.register(fastifyStatic, { root: webDir, prefix: '/sito/', redirect: true });
+    await app.register(fastifyStatic, { root: appDir, prefix: '/app/', redirect: true, decorateReply: false });
+    app.get('/', (_req, reply) => reply.type('text/html; charset=utf-8').send(home));
+    app.setNotFoundHandler((req, reply) => {
+      // Sito e app sono a pagina singola: ogni indirizzo interno riceve la pagina iniziale.
+      const path = req.url.split('?')[0]!;
+      if (req.method === 'GET' && path.startsWith('/sito/')) return reply.sendFile('index.html', webDir);
+      if (req.method === 'GET' && path.startsWith('/app/')) return reply.sendFile('index.html', appDir);
+      return reply.code(404).send({ error: { code: 'not_found', message: 'Risorsa non trovata' } });
+    });
+  } else {
+    app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: { code: 'not_found', message: 'Risorsa non trovata' } }));
+  }
 
   registerAuth(app);
-  await app.register(publicRoutes);
-  await app.register(authRoutes);
-  await app.register(meRoutes);
-  await app.register(trainingRoutes);
-  await app.register(wellbeingRoutes);
-  await app.register(trainerRoutes);
-  await app.register(coachingRoutes);
-  await app.register(messageRoutes);
-  await app.register(crmRoutes);
-  await app.register(mediaRoutes);
-  await app.register(communityRoutes);
-  await app.register(commerceRoutes);
-  await app.register(sensorRoutes);
-  await app.register(backofficeRoutes);
-  await app.register(structureRoutes);
-  await app.register(adminRoutes);
+  await app.register(
+    async (api) => {
+      await api.register(publicRoutes);
+      await api.register(authRoutes);
+      await api.register(meRoutes);
+      await api.register(trainingRoutes);
+      await api.register(wellbeingRoutes);
+      await api.register(trainerRoutes);
+      await api.register(coachingRoutes);
+      await api.register(messageRoutes);
+      await api.register(crmRoutes);
+      await api.register(mediaRoutes);
+      await api.register(communityRoutes);
+      await api.register(commerceRoutes);
+      await api.register(sensorRoutes);
+      await api.register(backofficeRoutes);
+      await api.register(structureRoutes);
+      await api.register(adminRoutes);
+    },
+    { prefix },
+  );
   return app;
 }

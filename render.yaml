@@ -1,0 +1,27 @@
+# Ambiente di prova di MOTIX su Render: un servizio (API, motore AI, sito e app) e un database.
+# Come usarlo: docs/ambiente-di-prova.md
+services:
+  - type: web
+    name: motix-prova
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: motix-prova-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      # Password dei quattro accessi di esempio: la scegli tu alla creazione (almeno 10 caratteri).
+      - key: DEMO_PASSWORD
+        sync: false
+
+databases:
+  - name: motix-prova-db
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"

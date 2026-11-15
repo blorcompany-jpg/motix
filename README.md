@@ -25,7 +25,12 @@ La specifica completa è nel documento «MOTIX – Progetto dell'app»; l'identi
 | 5. Community, shop e punti | Fatta |
 | 6. Sensore e motore AI | Fatta (con sensore simulato: vedi sotto) |
 
-### Cosa funziona oggi
+### Provarlo online
+
+Per navigare app e sito da un link, con quattro accessi di esempio già pronti (BTECH, struttura, personal trainer, utente):
+[docs/ambiente-di-prova.md](docs/ambiente-di-prova.md).
+
+## Cosa funziona oggi
 
 - **Database** con tutte le entità della sezione 10 del documento (oltre 50 tabelle), già pronte anche per le tappe successive.
 - **Chi si allena** (app): registrazione in tre passi, codice della struttura e del personal trainer facoltativi, codice amico,
