@@ -12,7 +12,8 @@ export interface DbHandle {
   close: () => Promise<void>;
 }
 
-const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url));
+// MIGRATIONS_DIR serve quando il server è compilato in un solo file (vedi scripts/build-api.mjs).
+const migrationsFolder = process.env.MIGRATIONS_DIR ?? fileURLToPath(new URL('../../drizzle', import.meta.url));
 
 /**
  * Apre il database.

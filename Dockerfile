@@ -11,6 +11,8 @@ COPY packages/shared/package.json packages/shared/
 RUN npm ci
 COPY . .
 # Sito su /sito, app su /app, API su /api: tutto sullo stesso indirizzo.
+# Server compilato in un solo file: con node invece di tsx usa metà della memoria.
+RUN node scripts/build-api.mjs
 RUN VITE_API_URL=/api VITE_BASE=/sito/ npm run build -w @motix/web
 # Il sensore simulato è acceso: è un ambiente di prova, non la versione per gli store.
 RUN cd apps/mobile && EXPO_PUBLIC_API_URL=/api EXPO_BASE_PATH=/app EXPO_PUBLIC_POD_SIMULATOR=1 EXPO_NO_TELEMETRY=1 CI=1 npx expo export --platform web
@@ -20,6 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 python3
 WORKDIR /srv
 COPY services/ai/requirements.txt services/ai/
 RUN pip3 install --no-cache-dir --break-system-packages -r services/ai/requirements.txt
+# Solo le librerie che servono per far girare il server.
+RUN mkdir -p /srv
 COPY --from=build /srv/node_modules node_modules
 COPY --from=build /srv/package.json package.json
 COPY --from=build /srv/tsconfig.base.json tsconfig.base.json
@@ -29,6 +33,6 @@ COPY --from=build /srv/apps/web/dist apps/web/dist
 COPY --from=build /srv/apps/mobile/dist apps/mobile/dist
 COPY services/ai services/ai
 COPY scripts/start-all.sh scripts/start-all.sh
-ENV NODE_ENV=production WEB_DIST=/srv/apps/web/dist APP_DIST=/srv/apps/mobile/dist AI_URL=http://127.0.0.1:8000 MEDIA_DIR=/tmp/motix-media
+ENV NODE_ENV=production PYTHONDONTWRITEBYTECODE=1 MALLOC_ARENA_MAX=2 WEB_DIST=/srv/apps/web/dist APP_DIST=/srv/apps/mobile/dist AI_URL=http://127.0.0.1:8000 MEDIA_DIR=/tmp/motix-media
 EXPOSE 4000
 CMD ["sh", "scripts/start-all.sh"]
