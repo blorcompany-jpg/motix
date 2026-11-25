@@ -1,5 +1,15 @@
 import { z } from 'zod';
-import { ACQUISITION_CHANNELS, CONSENT_TYPES, STRUCTURE_TYPES, SENSOR_MAX_SAMPLES, SENSOR_MAX_SECONDS, SENSOR_SERIAL, SENSOR_STATUSES } from './constants';
+import {
+  ACQUISITION_CHANNELS,
+  AUTOMATION_KINDS,
+  CONSENT_TYPES,
+  FOOD_CATEGORIES,
+  HEALTH_SOURCES,
+  MEALS,
+  PROFESSIONS,
+  PURCHASE_CHANNELS,
+  REGISTERED_PROFESSIONS,
+  STRUCTURE_TYPES, SENSOR_MAX_SAMPLES, SENSOR_MAX_SECONDS, SENSOR_SERIAL, SENSOR_STATUSES } from './constants';
 
 const email = z.string().trim().toLowerCase().email('Email non valida');
 const password = z
@@ -56,6 +66,16 @@ export const registerTrainerSchema = z.object({
   bio: z.string().trim().max(600).optional(),
   /** Codice di una struttura con cui collabora: facoltativo. */
   structureCode: z.string().trim().toUpperCase().max(16).optional(),
+  /** Che professionista sei. */
+  profession: z.enum(PROFESSIONS).default('personal_trainer'),
+  city: z.string().trim().max(80).optional(),
+  /** Albo o ordine e numero di iscrizione: obbligatori per nutrizionisti e fisioterapisti. */
+  registerName: z.string().trim().max(120).optional(),
+  registerNumber: z.string().trim().max(40).optional(),
+}).superRefine((v, ctx) => {
+  if (!REGISTERED_PROFESSIONS.includes(v.profession)) return;
+  if (!v.registerName) ctx.addIssue({ code: 'custom', path: ['registerName'], message: 'Indica l’albo o l’ordine a cui sei iscritto' });
+  if (!v.registerNumber) ctx.addIssue({ code: 'custom', path: ['registerNumber'], message: 'Indica il numero di iscrizione' });
 });
 export type RegisterTrainerInput = z.infer<typeof registerTrainerSchema>;
 
@@ -244,7 +264,143 @@ export const rewardSchema = z.object({
   active: z.boolean().default(true),
 });
 
-export const pointRulesSchema = z.object({ subscription: z.number().int().min(0).max(100000), renewal: z.number().int().min(0).max(100000) });
+/** Quota in punti per i professionisti: percentuale del prezzo pagato e valore di un punto in euro. */
+export const pointRulesSchema = z.object({ sharePct: z.number().min(0).max(100), pointValueEur: z.number().min(0.01).max(100) });
+
+export const packageRulesSchema = z.object({ minSeats: z.number().int().min(1).max(1000), unitPriceEur: z.number().min(0).max(1000) });
+
+/** Attivazione dell'abbonamento: chi l'ha venduto e a quanto. Oggi la usa BTECH; poi le conferme di store e sito. */
+export const activationSchema = z.object({
+  channel: z.enum(PURCHASE_CHANNELS).default('web'),
+  transactionId: z.string().trim().max(200).optional(),
+});
+
+/* ---------- Professionisti: profilo, template, check-in, automazioni ---------- */
+
+export const trainerProfileSchema = z.object({
+  specializations: z.array(z.string().trim().min(1).max(60)).max(12).optional(),
+  bio: z.string().trim().max(600).optional(),
+  publicProfile: z.boolean().optional(),
+  city: z.string().trim().max(80).optional(),
+  registerName: z.string().trim().max(120).optional(),
+  registerNumber: z.string().trim().max(40).optional(),
+});
+
+const templateExercise = z.object({
+  exerciseId: z.string().uuid(),
+  sets: z.number().int().min(1).max(10),
+  reps: z.number().int().min(1).max(200),
+  loadKg: z.number().min(0).max(500).nullable().optional(),
+  restSeconds: z.number().int().min(0).max(600),
+});
+
+/** Scheda preimpostata del professionista: le sedute hanno un giorno relativo (0 = primo giorno). */
+export const planTemplateSchema = z.object({
+  name: z.string().trim().min(2, 'Dai un nome al template').max(80),
+  note: z.string().trim().max(600).optional(),
+  sessions: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1, 'Dai un nome alla seduta').max(60),
+        dayOffset: z.number().int().min(0).max(27),
+        exercises: z.array(templateExercise).min(1, 'Aggiungi almeno un esercizio').max(15),
+      }),
+    )
+    .min(1, 'Aggiungi almeno una seduta')
+    .max(7),
+});
+export type PlanTemplateInput = z.infer<typeof planTemplateSchema>;
+
+export const applyTemplateSchema = z.object({ templateId: z.string().uuid(), startDay: isoDate });
+
+const scale = z.number().int().min(1).max(5).optional();
+export const checkInSchema = z.object({
+  day: isoDate,
+  weightKg: z.number().min(25).max(350).optional(),
+  waistCm: z.number().min(30).max(250).optional(),
+  energy: scale,
+  sleep: scale,
+  stress: scale,
+  training: scale,
+  nutrition: scale,
+  notes: z.string().trim().max(1000).optional(),
+  /** Foto di progresso già caricate con /media. */
+  photoIds: z.array(z.string().uuid()).max(4).default([]),
+});
+export type CheckInInput = z.infer<typeof checkInSchema>;
+
+export const checkInCommentSchema = z.object({ comment: z.string().trim().min(1, 'Scrivi un commento').max(1000) });
+
+export const checkInFrequencySchema = z.object({ everyDays: z.number().int().min(0).max(30) });
+
+export const automationSchema = z.object({
+  kind: z.enum(AUTOMATION_KINDS),
+  enabled: z.boolean(),
+  text: z.string().trim().min(5, 'Scrivi il messaggio').max(600),
+});
+
+export const healthSyncSchema = z.object({
+  source: z.enum(HEALTH_SOURCES),
+  days: z
+    .array(
+      z.object({
+        day: isoDate,
+        steps: z.number().int().min(0).max(200_000).optional(),
+        sleepMinutes: z.number().int().min(0).max(1440).optional(),
+        restingHr: z.number().int().min(25).max(220).optional(),
+        activeKcal: z.number().int().min(0).max(20_000).optional(),
+      }),
+    )
+    .min(1)
+    .max(31),
+});
+
+/* ---------- Alimentazione ---------- */
+
+export const foodSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  category: z.enum(FOOD_CATEGORIES),
+  kcal: z.number().min(0).max(950),
+  protein: z.number().min(0).max(100),
+  carbs: z.number().min(0).max(100),
+  fat: z.number().min(0).max(100),
+  fiber: z.number().min(0).max(100).default(0),
+});
+
+const mealItems = z.array(z.object({ foodId: z.string().uuid(), grams: z.number().min(1).max(2000) })).min(1, 'Aggiungi almeno un alimento').max(20);
+
+export const mealPlanSchema = z.object({
+  title: z.string().trim().min(2, 'Dai un titolo al piano').max(80),
+  notes: z.string().trim().max(1500).optional(),
+  days: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(40),
+        meals: z
+          .array(
+            z.object({
+              meal: z.enum(MEALS),
+              time: z.string().regex(/^\d{2}:\d{2}$/, 'Orario non valido').optional(),
+              items: mealItems,
+              /** Fino a tre alternative equivalenti per lo stesso pasto. */
+              alternatives: z.array(mealItems).max(3).default([]),
+            }),
+          )
+          .min(1)
+          .max(MEALS.length),
+      }),
+    )
+    .min(1, 'Aggiungi almeno un giorno')
+    .max(7),
+});
+export type MealPlanInput = z.infer<typeof mealPlanSchema>;
+
+export const foodLogSchema = z.object({ day: isoDate, meal: z.enum(MEALS), foodId: z.string().uuid(), grams: z.number().min(1).max(2000) });
+
+/* ---------- Pacchetti per le palestre ---------- */
+
+export const packageRequestSchema = z.object({ seats: z.number().int().min(1).max(5000) });
+export const seatAssignSchema = z.object({ userId: z.string().uuid() });
 
 /* ---------- Sensore motix pod ---------- */
 const serial = z

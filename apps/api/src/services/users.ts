@@ -23,6 +23,7 @@ import {
 import { notFound } from '../lib/errors';
 import { hashToken, newCode, newOpaqueToken, signAccessToken } from '../lib/tokens';
 import { track } from './events';
+import { describeTrainer } from './professionals';
 import { currentSubscription, describeSubscription } from './subscription';
 
 const DAY_MS = 86_400_000;
@@ -104,7 +105,7 @@ export async function buildMe(ctx: AppCtx, userId: string): Promise<MeResponse> 
   let trainer: MeResponse['trainer'] = null;
   if (u.role === 'personal_trainer') {
     const [t] = await db.select().from(trainers).where(eq(trainers.userId, u.id)).limit(1);
-    if (t) trainer = { id: t.id, status: t.status, inviteCode: t.inviteCode, pointsBalance: t.pointsBalance };
+    if (t) trainer = describeTrainer(t);
   }
 
   let ownedStructure: MeResponse['ownedStructure'] = null;

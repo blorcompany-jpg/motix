@@ -282,7 +282,16 @@ export async function authRoutes(app: FastifyInstance) {
       await setConsents(tx, u.id, { terms: true }, now);
       const [t] = await tx
         .insert(trainers)
-        .values({ userId: u.id, specializations: input.specializations, bio: input.bio, inviteCode })
+        .values({
+          userId: u.id,
+          specializations: input.specializations,
+          bio: input.bio,
+          inviteCode,
+          profession: input.profession,
+          city: input.city,
+          registerName: input.registerName,
+          registerNumber: input.registerNumber,
+        })
         .returning();
       if (structure && t) {
         // Se la struttura aveva già invitato questa email, il collegamento è subito attivo.

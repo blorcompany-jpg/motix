@@ -1,5 +1,5 @@
 /**
- * Dati di esempio per l'ambiente di prova: quattro accessi (BTECH, struttura, personal trainer, utente)
+ * Dati di esempio per l'ambiente di prova: cinque accessi (BTECH, struttura, personal trainer, nutrizionista, utente)
  * e un po' di attività, così ogni area ha qualcosa da mostrare.
  *
  * Si attiva solo se è impostata DEMO_PASSWORD, che diventa la password dei quattro accessi.
@@ -17,6 +17,7 @@ export const DEMO_ACCOUNTS = {
   admin: { email: 'admin@motix.demo', label: 'Admin BTECH', where: 'sito' },
   owner: { email: 'struttura@motix.demo', label: 'Struttura affiliata (Fit Bari)', where: 'sito' },
   trainer: { email: 'trainer@motix.demo', label: 'Personal trainer (Luca Verdi)', where: 'sito' },
+  nutritionist: { email: 'nutrizionista@motix.demo', label: 'Nutrizionista (Sara Neri)', where: 'sito' },
   user: { email: 'utente@motix.demo', label: 'Utente finale (Giulia Rossi)', where: 'app' },
 } as const;
 
@@ -191,6 +192,127 @@ export async function seedDemo(app: FastifyInstance, ctx: AppCtx, password: stri
   } finally {
     setClock(0);
   }
+}
+
+/**
+ * Seconda parte dei dati di esempio, aggiunta con le funzioni per i professionisti: nutrizionista con piano alimentare,
+ * template, check-in, app salute, messaggi automatici e un pacchetto della palestra.
+ * Gira anche su un ambiente già popolato: si ferma se la nutrizionista di esempio esiste già.
+ */
+export async function seedDemoProfessionals(app: FastifyInstance, ctx: AppCtx, password: string, prefix: string) {
+  const { db } = ctx;
+  const [done] = await db.select({ id: users.id }).from(users).where(eq(users.email, DEMO_ACCOUNTS.nutritionist.email)).limit(1);
+  const [giuliaRow] = await db.select({ id: users.id }).from(users).where(eq(users.email, DEMO_ACCOUNTS.user.email)).limit(1);
+  if (done || !giuliaRow) return false;
+  const call = async (method: string, url: string, body?: unknown, token?: string) => {
+    const res = await app.inject({
+      method: method as 'GET',
+      url: prefix + url,
+      payload: body as object | undefined,
+      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), 'x-forwarded-for': `10.0.1.${1 + Math.floor(Math.random() * 250)}` },
+    });
+    const data = res.body ? JSON.parse(res.body) : null;
+    if (res.statusCode >= 400) throw new Error(`Dati di esempio: ${method} ${url} → ${res.statusCode} ${res.body.slice(0, 200)}`);
+    return data;
+  };
+  const login = async (email: string) => (await call('POST', '/auth/login', { email, password })).accessToken as string;
+  const adminToken = await login(DEMO_ACCOUNTS.admin.email);
+  const ptToken = await login(DEMO_ACCOUNTS.trainer.email);
+  const ownerToken = await login(DEMO_ACCOUNTS.owner.email);
+  const giulia = await login(DEMO_ACCOUNTS.user.email);
+  const today = toDay(ctx.now());
+  const ago = (n: number) => toDay(new Date(ctx.now().getTime() - n * DAY));
+
+  // Nutrizionista con albo verificato, collegata a Giulia.
+  const nutri = await call('POST', '/auth/register/trainer', {
+    email: DEMO_ACCOUNTS.nutritionist.email,
+    password,
+    firstName: 'Sara',
+    lastName: 'Neri',
+    birthDate: '1988-03-11',
+    acceptTerms: true,
+    profession: 'nutritionist',
+    city: 'Bari',
+    registerName: 'Ordine Nazionale dei Biologi',
+    registerNumber: 'DEMO-000000',
+    specializations: ['Nutrizione sportiva', 'Ricomposizione corporea'],
+    bio: 'Biologa nutrizionista. Piani alimentari per chi si allena, senza rinunce inutili.',
+  });
+  const nutriId = nutri.user.trainer.id as string;
+  await call('POST', `/admin/trainers/${nutriId}/approve`, {}, adminToken);
+  await call('PUT', `/admin/trainers/${nutriId}/register`, { verified: true }, adminToken);
+  await call('PATCH', '/trainer', { city: 'Bari' }, ptToken);
+  await call('POST', '/me/trainer-links', { code: nutri.user.trainer.inviteCode }, giulia);
+  const nutriToken = nutri.accessToken as string;
+  const nutriLink = (await call('GET', '/trainer/clients', undefined, nutriToken)).clients[0].linkId as string;
+  const foods = (await call('GET', '/foods', undefined, nutriToken)).foods as Array<{ id: string; name: string }>;
+  const f = (name: string) => foods.find((x) => x.name === name)!.id;
+  await call(
+    'PUT',
+    `/trainer/clients/${nutriLink}/meal-plan`,
+    {
+      title: 'Tonificazione · 1.800 kcal circa',
+      notes: 'Nei giorni di allenamento aggiungi una banana prima della seduta. Bevi almeno 2 litri d’acqua.',
+      days: [
+        {
+          name: 'Giorno di allenamento',
+          meals: [
+            { meal: 'breakfast', time: '07:30', items: [{ foodId: f('Yogurt greco 0%'), grams: 170 }, { foodId: f('Fiocchi d’avena'), grams: 40 }, { foodId: f('Frutti di bosco'), grams: 100 }], alternatives: [[{ foodId: f('Latte parzialmente scremato'), grams: 200 }, { foodId: f('Fette biscottate'), grams: 30 }, { foodId: f('Marmellata'), grams: 20 }]] },
+            { meal: 'snack_am', items: [{ foodId: f('Mela'), grams: 150 }, { foodId: f('Mandorle'), grams: 15 }], alternatives: [] },
+            { meal: 'lunch', time: '13:00', items: [{ foodId: f('Pasta integrale'), grams: 80 }, { foodId: f('Petto di pollo'), grams: 120 }, { foodId: f('Zucchine'), grams: 200 }, { foodId: f('Olio extravergine d’oliva'), grams: 10 }], alternatives: [[{ foodId: f('Riso integrale'), grams: 80 }, { foodId: f('Tonno al naturale, sgocciolato'), grams: 100 }, { foodId: f('Pomodori'), grams: 200 }, { foodId: f('Olio extravergine d’oliva'), grams: 10 }]] },
+            { meal: 'snack_pm', time: '17:00', items: [{ foodId: f('Banana'), grams: 120 }], alternatives: [] },
+            { meal: 'dinner', time: '20:30', items: [{ foodId: f('Salmone fresco'), grams: 130 }, { foodId: f('Patate'), grams: 200 }, { foodId: f('Insalata (lattuga)'), grams: 100 }, { foodId: f('Olio extravergine d’oliva'), grams: 10 }], alternatives: [[{ foodId: f('Uova intere'), grams: 120 }, { foodId: f('Pane integrale'), grams: 60 }, { foodId: f('Spinaci'), grams: 200 }, { foodId: f('Olio extravergine d’oliva'), grams: 10 }]] },
+          ],
+        },
+      ],
+    },
+    nutriToken,
+  );
+  for (const [meal, food, grams] of [['breakfast', 'Yogurt greco 0%', 170], ['breakfast', 'Fiocchi d’avena', 40], ['lunch', 'Pasta integrale', 80], ['lunch', 'Petto di pollo', 120]] as const)
+    await call('POST', '/me/food-diary', { day: today, meal, foodId: f(food), grams }, giulia);
+
+  // Template del personal trainer, check-in settimanali e messaggi automatici.
+  const ptLink = (await call('GET', '/trainer/clients', undefined, ptToken)).clients.find((c: { client: { firstName: string } }) => c.client.firstName === 'Giulia').linkId as string;
+  const lib = (await call('GET', '/exercises', undefined, ptToken)).exercises as Array<{ id: string; name: string; loadable: boolean }>;
+  const pick = (n: number, loadable: boolean) => lib.filter((e) => e.loadable === loadable).slice(0, n);
+  const [a, b, c, d] = pick(4, true);
+  const [core] = pick(1, false);
+  await call(
+    'POST',
+    '/trainer/templates',
+    {
+      name: 'Tonificazione 3 giorni · principianti',
+      note: 'Carichi moderati, tecnica pulita. Recuperi completi.',
+      sessions: [
+        { title: 'Total body A', dayOffset: 0, exercises: [{ exerciseId: a!.id, sets: 3, reps: 12, loadKg: 20, restSeconds: 90 }, { exerciseId: core!.id, sets: 3, reps: 30, restSeconds: 45 }] },
+        { title: 'Total body B', dayOffset: 2, exercises: [{ exerciseId: b!.id, sets: 3, reps: 12, loadKg: 10, restSeconds: 90 }, { exerciseId: c!.id, sets: 3, reps: 12, loadKg: 12, restSeconds: 90 }] },
+        { title: 'Total body C', dayOffset: 4, exercises: [{ exerciseId: d!.id, sets: 3, reps: 10, loadKg: 20, restSeconds: 120 }] },
+      ],
+    },
+    ptToken,
+  );
+  await call('PUT', `/trainer/clients/${ptLink}/check-in-frequency`, { everyDays: 7 }, ptToken);
+  await call('POST', '/me/check-ins', { day: ago(1), weightKg: 61.4, waistCm: 70, energy: 4, sleep: 3, stress: 2, training: 5, nutrition: 4, notes: 'Bene! Un po’ stanca a fine settimana.' }, giulia);
+  const checks = (await call('GET', `/trainer/clients/${ptLink}/check-ins`, undefined, ptToken)).checkIns;
+  await call('POST', `/trainer/clients/${ptLink}/check-ins/${checks[0].id}/comment`, { comment: 'Ottimo lavoro Giulia. Questa settimana aggiungiamo 2 kg sulla panca.' }, ptToken);
+  await call('PUT', '/trainer/automations', { kind: 'welcome', enabled: true, text: 'Ciao {nome}, benvenuta! Da oggi ti seguo su MOTIX: trovi qui il tuo piano.' }, ptToken);
+  await call('PUT', '/trainer/automations', { kind: 'check_in_reminder', enabled: true, text: 'Ciao {nome}, è il momento del check-in settimanale: bastano due minuti.' }, ptToken);
+
+  // Dati di una settimana come se arrivassero da Apple Salute.
+  await call(
+    'POST',
+    '/me/health',
+    { source: 'apple_health', days: Array.from({ length: 7 }, (_, i) => ({ day: ago(6 - i), steps: [6400, 9100, 7300, 11200, 5800, 8600, 4200][i], sleepMinutes: [410, 385, 440, 395, 420, 460, 400][i], restingHr: [61, 60, 60, 59, 61, 58, 59][i], activeKcal: [320, 480, 350, 560, 290, 430, 210][i] })) },
+    giulia,
+  );
+
+  // Pacchetto di 10 abbonamenti per Fit Bari, già pagato: uno regalato a Paolo.
+  await call('POST', '/structure/packages', { seats: 10 }, ownerToken);
+  const pkg = (await call('GET', '/admin/packages', undefined, adminToken)).packages[0];
+  await call('POST', `/admin/packages/${pkg.id}/confirm`, {}, adminToken);
+  const [paolo] = await db.select({ id: users.id }).from(users).where(eq(users.email, 'paolo@motix.demo')).limit(1);
+  if (paolo) await call('POST', '/structure/packages/assign', { userId: paolo.id }, ownerToken);
+  return true;
 }
 
 /** Pagina iniziale dell'ambiente di prova: i due ingressi e gli accessi di esempio. */

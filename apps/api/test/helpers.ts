@@ -7,7 +7,7 @@ import { AiUnavailable, type AiClient, type SetAnalysis, type WeekDecision, type
 import { DevMailer } from '../src/lib/mailer';
 import { hashPassword } from '../src/lib/password';
 import { MemoryStorage } from '../src/lib/storage';
-import { ensureExerciseLibrary, ensureShopCatalog } from '../src/services/library';
+import { ensureExerciseLibrary, ensureFoodLibrary, ensureShopCatalog } from '../src/services/library';
 
 export interface TestEnv {
   app: FastifyInstance;
@@ -55,6 +55,7 @@ export async function createEnv(): Promise<TestEnv> {
   await handle.migrate();
   await ensureExerciseLibrary(handle.db);
   await ensureShopCatalog(handle.db);
+  await ensureFoodLibrary(handle.db);
   const mailer = new DevMailer();
   const clock = { now: new Date('2026-11-14T10:00:00Z') };
   const config = loadConfig({ NODE_ENV: 'test', JWT_SECRET: 'x'.repeat(40), PUBLIC_WEB_URL: 'https://motix.test' });

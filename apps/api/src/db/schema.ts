@@ -55,7 +55,7 @@ export const sensorOwnerEnum = pgEnum('sensor_owner', ['btech', 'structure', 'us
 export const sensorStatusEnum = pgEnum('sensor_status', ['in_stock', 'active', 'faulty', 'retired']);
 export const containerEnum = pgEnum('hydration_container', ['glass', 'bottle_05', 'bottle_1', 'bottle_15', 'flask_05', 'custom']);
 export const subscriptionStatusEnum = pgEnum('subscription_status', ['trial', 'active', 'cancelled', 'expired', 'free']);
-export const storeEnum = pgEnum('store', ['app_store', 'google_play']);
+export const storeEnum = pgEnum('store', ['app_store', 'google_play', 'web', 'structure']);
 export const mediaTypeEnum = pgEnum('media_type', ['video', 'image']);
 export const postVisibilityEnum = pgEnum('post_visibility', ['structure', 'global']);
 export const moderationStatusEnum = pgEnum('moderation_status', ['pending', 'approved', 'removed']);
@@ -67,6 +67,12 @@ export const redemptionStatusEnum = pgEnum('redemption_status', ['requested', 'a
 export const shopCategoryEnum = pgEnum('shop_category', ['sensor', 'equipment', 'apparel', 'accessories']);
 export const referralStatusEnum = pgEnum('referral_status', ['pending', 'rewarded', 'void']);
 export const platformEnum = pgEnum('device_platform', ['ios', 'android', 'web']);
+export const professionEnum = pgEnum('profession', ['personal_trainer', 'athletic_trainer', 'physiotherapist', 'nutritionist']);
+export const automationKindEnum = pgEnum('automation_kind', ['welcome', 'check_in_reminder', 'inactive', 'at_risk']);
+export const healthSourceEnum = pgEnum('health_source', ['apple_health', 'health_connect', 'manual']);
+export const mealEnum = pgEnum('meal', ['breakfast', 'snack_am', 'lunch', 'snack_pm', 'dinner']);
+export const foodCategoryEnum = pgEnum('food_category', ['cereals', 'protein', 'dairy', 'vegetables', 'fruit', 'legumes', 'fats', 'other']);
+export const packageStatusEnum = pgEnum('package_status', ['requested', 'paid', 'cancelled']);
 
 /* ---------- Strutture ---------- */
 
@@ -253,6 +259,13 @@ export const trainers = pgTable(
     status: approvalStatusEnum('status').notNull().default('pending'),
     statusReason: text('status_reason'),
     pointsBalance: integer('points_balance').notNull().default(0),
+    /** Professione scelta alla registrazione. */
+    profession: professionEnum('profession').notNull().default('personal_trainer'),
+    city: text('city'),
+    /** Albo o ordine e numero di iscrizione, verificati da BTECH. */
+    registerName: text('register_name'),
+    registerNumber: text('register_number'),
+    registerVerifiedAt: ts('register_verified_at'),
     approvedAt: ts('approved_at'),
     createdAt: createdAt(),
   },
@@ -322,6 +335,8 @@ export const clientLinks = pgTable(
     trainerId: uuid('trainer_id').notNull().references(() => trainers.id, { onDelete: 'cascade' }),
     status: clientLinkStatusEnum('status').notNull(),
     dataConsent: boolean('data_consent').notNull().default(false),
+    /** Ogni quanti giorni il professionista chiede il check-in; null se non lo chiede. */
+    checkInEveryDays: integer('check_in_every_days'),
     startedAt: ts('started_at'),
     closedAt: ts('closed_at'),
     createdAt: createdAt(),
@@ -839,4 +854,180 @@ export const analyticsEvents = pgTable(
     data: jsonb('data').$type<Record<string, unknown>>(),
   },
   (t) => [index('analytics_events_type_idx').on(t.type, t.occurredAt), index('analytics_events_structure_idx').on(t.structureId)],
+);
+
+/* ---------- Professionisti: template, check-in, automazioni ---------- */
+
+/** Schede preimpostate del professionista, da assegnare ai clienti. */
+export const planTemplates = pgTable(
+  'plan_templates',
+  {
+    id: id(),
+    trainerId: uuid('trainer_id').notNull().references(() => trainers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    note: text('note'),
+    sessions: jsonb('sessions')
+      .$type<Array<{ title: string; dayOffset: number; exercises: Array<{ exerciseId: string; sets: number; reps: number; loadKg?: number | null; restSeconds: number }> }>>()
+      .notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('plan_templates_trainer_idx').on(t.trainerId)],
+);
+
+/** Check-in periodico del cliente: peso, misure, sensazioni e foto, con il commento del professionista. */
+export const checkIns = pgTable(
+  'check_ins',
+  {
+    id: id(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    weightKg: numeric('weight_kg', { precision: 5, scale: 1 }),
+    waistCm: numeric('waist_cm', { precision: 5, scale: 1 }),
+    energy: integer('energy'),
+    sleep: integer('sleep'),
+    stress: integer('stress'),
+    training: integer('training'),
+    nutrition: integer('nutrition'),
+    notes: text('notes'),
+    photoKeys: jsonb('photo_keys').$type<string[]>().notNull().default([]),
+    comment: text('comment'),
+    commentByTrainerId: uuid('comment_by_trainer_id').references(() => trainers.id, { onDelete: 'set null' }),
+    commentedAt: ts('commented_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('check_ins_user_day_uq').on(t.userId, t.day)],
+);
+
+/** Messaggi automatici del professionista ai suoi clienti. */
+export const trainerAutomations = pgTable(
+  'trainer_automations',
+  {
+    trainerId: uuid('trainer_id').notNull().references(() => trainers.id, { onDelete: 'cascade' }),
+    kind: automationKindEnum('kind').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    text: text('text').notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.trainerId, t.kind] })],
+);
+
+/** Registro degli invii automatici, per non mandare due volte lo stesso messaggio. */
+export const automationSends = pgTable(
+  'automation_sends',
+  {
+    id: id(),
+    trainerId: uuid('trainer_id').notNull().references(() => trainers.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    kind: automationKindEnum('kind').notNull(),
+    /** Chiave che rende unico l'invio: il collegamento per il benvenuto, il giorno o la settimana per gli altri. */
+    dedupeKey: text('dedupe_key').notNull(),
+    sentAt: ts('sent_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('automation_sends_uq').on(t.trainerId, t.userId, t.kind, t.dedupeKey)],
+);
+
+/** Dati giornalieri da Apple Salute e Health Connect. */
+export const healthDays = pgTable(
+  'health_days',
+  {
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    steps: integer('steps'),
+    sleepMinutes: integer('sleep_minutes'),
+    restingHr: integer('resting_hr'),
+    activeKcal: integer('active_kcal'),
+    source: healthSourceEnum('source').notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] })],
+);
+
+/* ---------- Alimentazione ---------- */
+
+/** Alimenti con i valori per 100 g. Quelli di BTECH sono comuni a tutti; i nutrizionisti possono aggiungerne di propri. */
+export const foods = pgTable(
+  'foods',
+  {
+    id: id(),
+    name: text('name').notNull(),
+    category: foodCategoryEnum('category').notNull(),
+    kcal: numeric('kcal', { precision: 6, scale: 1 }).notNull(),
+    protein: numeric('protein', { precision: 5, scale: 1 }).notNull(),
+    carbs: numeric('carbs', { precision: 5, scale: 1 }).notNull(),
+    fat: numeric('fat', { precision: 5, scale: 1 }).notNull(),
+    fiber: numeric('fiber', { precision: 5, scale: 1 }).notNull().default('0'),
+    /** null per gli alimenti della libreria BTECH. */
+    trainerId: uuid('trainer_id').references(() => trainers.id, { onDelete: 'cascade' }),
+    slug: text('slug'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('foods_slug_uq').on(t.slug), index('foods_trainer_idx').on(t.trainerId)],
+);
+
+export type MealPlanDays = Array<{
+  name: string;
+  meals: Array<{ meal: 'breakfast' | 'snack_am' | 'lunch' | 'snack_pm' | 'dinner'; time?: string; items: Array<{ foodId: string; grams: number }>; alternatives: Array<Array<{ foodId: string; grams: number }>> }>;
+}>;
+
+/** Piano alimentare del nutrizionista per un cliente. Uno solo attivo per volta. */
+export const mealPlans = pgTable(
+  'meal_plans',
+  {
+    id: id(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    trainerId: uuid('trainer_id').references(() => trainers.id, { onDelete: 'set null' }),
+    title: text('title').notNull(),
+    notes: text('notes'),
+    days: jsonb('days').$type<MealPlanDays>().notNull(),
+    status: planStatusEnum('status').notNull().default('active'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('meal_plans_user_idx').on(t.userId, t.status)],
+);
+
+/** Diario alimentare dell'utente. */
+export const foodLogs = pgTable(
+  'food_logs',
+  {
+    id: id(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    meal: mealEnum('meal').notNull(),
+    foodId: uuid('food_id').notNull().references(() => foods.id, { onDelete: 'cascade' }),
+    grams: numeric('grams', { precision: 6, scale: 1 }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('food_logs_user_day_idx').on(t.userId, t.day)],
+);
+
+/* ---------- Pacchetti di abbonamenti per le palestre ---------- */
+
+export const structurePackages = pgTable(
+  'structure_packages',
+  {
+    id: id(),
+    structureId: uuid('structure_id').notNull().references(() => structures.id, { onDelete: 'cascade' }),
+    seats: integer('seats').notNull(),
+    unitPriceEur: numeric('unit_price_eur', { precision: 7, scale: 2 }).notNull(),
+    status: packageStatusEnum('status').notNull().default('requested'),
+    requestedBy: uuid('requested_by').notNull().references(() => users.id),
+    paidAt: ts('paid_at'),
+    confirmedBy: uuid('confirmed_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index('structure_packages_structure_idx').on(t.structureId)],
+);
+
+/** Un posto del pacchetto: libero finché la palestra non lo assegna a un iscritto. */
+export const structureSeats = pgTable(
+  'structure_seats',
+  {
+    id: id(),
+    packageId: uuid('package_id').notNull().references(() => structurePackages.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    subscriptionId: uuid('subscription_id').references(() => subscriptions.id, { onDelete: 'set null' }),
+    assignedAt: ts('assigned_at'),
+  },
+  (t) => [index('structure_seats_package_idx').on(t.packageId)],
 );

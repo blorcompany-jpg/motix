@@ -247,11 +247,11 @@ describe('video dei personal trainer', () => {
 });
 
 describe('punti e premi del personal trainer', () => {
-  it('i punti arrivano quando il cliente si abbona, non durante la prova', async () => {
-    expect((await call('GET', '/trainer/points', pt.token)).body).toMatchObject({ balance: 0, rules: { subscription: 100, renewal: 50 }, movements: [] });
+  it('i punti arrivano quando il cliente si abbona, non durante la prova: il 20% di €49,99 sono 100 punti', async () => {
+    expect((await call('GET', '/trainer/points', pt.token)).body).toMatchObject({ balance: 0, rules: { sharePct: 20, pointValueEur: 0.1, pointsPerSubscription: 100 }, movements: [] });
     const res = await call('POST', `/admin/users/${U.anna!.id}/subscription/activate`, env.adminToken);
     expect(res.body).toEqual({ trainerId: pt.id, points: 100 });
-    expect((await call('GET', '/me/subscription', U.anna!.token)).body).toMatchObject({ status: 'active', premium: true, installmentsPaid: 1 });
+    expect((await call('GET', '/me/subscription', U.anna!.token)).body).toMatchObject({ status: 'active', premium: true, priceYearlyEur: 49.99, channel: 'web' });
     const points = (await call('GET', '/trainer/points', pt.token)).body;
     expect(points.balance).toBe(100);
     expect(points.movements[0]).toMatchObject({ reason: 'subscription', points: 100, balanceAfter: 100 });
@@ -261,9 +261,11 @@ describe('punti e premi del personal trainer', () => {
   });
 
   it('BTECH cambia il valore dei punti e gestisce il catalogo dei premi', async () => {
-    await call('PUT', '/admin/points/rules', env.adminToken, { subscription: 100, renewal: 80 });
+    // 16% di €49,99 = €8, cioè 80 punti da €0,10; il rinnovo arriva dall'App Store
+    expect((await call('PUT', '/admin/points/rules', env.adminToken, { sharePct: 16, pointValueEur: 0.1 })).body.rules).toEqual({ sharePct: 16, pointValueEur: 0.1, pointsPerSubscription: 80 });
     tick();
-    expect((await call('POST', `/admin/users/${U.anna!.id}/subscription/renew`, env.adminToken)).body.points).toBe(80);
+    expect((await call('POST', `/admin/users/${U.anna!.id}/subscription/renew`, env.adminToken, { channel: 'app_store', transactionId: 'T-1' })).body.points).toBe(80);
+    expect((await call('GET', '/me/subscription', U.anna!.token)).body.channel).toBe('app_store');
     const state = await call('POST', '/admin/rewards', env.adminToken, { name: 'Sensore motix pod', pointsRequired: 150, stock: 1 });
     expect(state.body.rewards).toHaveLength(1);
     await call('POST', '/admin/rewards', env.adminToken, { name: 'Buono shop BLOR da 50 €', pointsRequired: 500 });

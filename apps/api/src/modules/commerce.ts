@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from '../auth';
 import { clientLinks, exercises, mediaFiles, pointMovements, rewardRedemptions, rewards, shopProducts, structures, trainerVideos, trainers, users } from '../db/schema';
 import { badRequest, conflict, forbidden, notFound, parse } from '../lib/errors';
 import { track } from '../services/events';
-import { getPointRules, movePoints } from '../services/points';
+import { describePointRules, getPointRules, movePoints } from '../services/points';
 import { mediaUrl } from './media';
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -141,7 +141,7 @@ export async function commerceRoutes(app: FastifyInstance) {
       .limit(50);
     return {
       balance: t?.balance ?? 0,
-      rules: await getPointRules(db),
+      rules: describePointRules(await getPointRules(db)),
       movements: movements.map((m) => ({ id: m.id, reason: m.reason, points: m.points, balanceAfter: m.balanceAfter, note: m.note, at: m.createdAt.toISOString() })),
       rewards: catalog.map((r) => ({ id: r.id, name: r.name, description: r.description, pointsRequired: r.pointsRequired, available: r.stock === null || r.stock > 0 })),
       redemptions: mine.map(({ r, name }) => ({ id: r.id, reward: name, points: r.points, status: r.status, at: r.createdAt.toISOString() })),

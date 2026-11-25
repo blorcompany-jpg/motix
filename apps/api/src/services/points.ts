@@ -1,18 +1,26 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { COMMITMENT_MONTHS, DEFAULT_POINT_RULES } from '@motix/shared';
+import { COMMITMENT_MONTHS, DEFAULT_POINT_RULES, PRICE_YEARLY_EUR, pointsFor, type PurchaseChannel } from '@motix/shared';
 import type { AppCtx } from '../context';
 import type { Db } from '../db/client';
-import { clientLinks, pointMovements, referrals, settings, subscriptions, trainers, users } from '../db/schema';
+import { pointMovements, referrals, settings, subscriptions, trainers, users } from '../db/schema';
 import { conflict, notFound } from '../lib/errors';
 import { track } from './events';
+import { activeLinks } from './professionals';
 import { currentSubscription } from './subscription';
 
-export type PointRules = { subscription: number; renewal: number };
+export type PointRules = { sharePct: number; pointValueEur: number };
 
 export async function getPointRules(db: Db): Promise<PointRules> {
   const [row] = await db.select().from(settings).where(eq(settings.key, 'points')).limit(1);
-  return { ...DEFAULT_POINT_RULES, ...((row?.value ?? {}) as Partial<PointRules>) };
+  const v = (row?.value ?? {}) as Partial<PointRules>;
+  return {
+    sharePct: typeof v.sharePct === 'number' ? v.sharePct : DEFAULT_POINT_RULES.sharePct,
+    pointValueEur: typeof v.pointValueEur === 'number' ? v.pointValueEur : DEFAULT_POINT_RULES.pointValueEur,
+  };
 }
+
+/** Regole come le vedono professionisti e pannello, con i punti per un abbonamento a prezzo pieno. */
+export const describePointRules = (r: PointRules) => ({ ...r, pointsPerSubscription: pointsFor(PRICE_YEARLY_EUR, r) });
 
 export async function setPointRules(db: Db, rules: PointRules) {
   await db.insert(settings).values({ key: 'points', value: rules }).onConflictDoUpdate({ target: settings.key, set: { value: rules, updatedAt: new Date() } });
@@ -39,11 +47,20 @@ export async function movePoints(
   });
 }
 
+export interface Activation {
+  /** Dove è stato comprato: App Store, Google Play, sito o pacchetto della palestra. */
+  channel?: PurchaseChannel;
+  transactionId?: string;
+  /** Prezzo pagato IVA inclusa: serve a calcolare i punti. Di default il prezzo pieno annuale. */
+  priceEur?: number;
+}
+
 /**
- * Attiva (o rinnova) l'abbonamento dopo il primo addebito e assegna i punti al personal trainer del cliente.
- * Oggi lo richiama BTECH dal pannello; con gli abbonamenti in-app lo richiamerà la conferma di acquisto dello store.
+ * Attiva (o rinnova) l'abbonamento annuale dopo il pagamento e assegna i punti al professionista che ha portato il cliente:
+ * il 20% del prezzo pagato, convertito in punti.
+ * Oggi lo richiamano BTECH dal pannello e i pacchetti delle palestre; poi le conferme di App Store, Google Play e del pagamento sul sito.
  */
-export async function activateSubscription(ctx: AppCtx, userId: string, kind: 'subscription' | 'renewal') {
+export async function activateSubscription(ctx: AppCtx, userId: string, kind: 'subscription' | 'renewal', pay: Activation = {}) {
   const { db } = ctx;
   const sub = await currentSubscription(ctx, userId);
   if (!sub) throw notFound('Abbonamento non trovato');
@@ -54,19 +71,35 @@ export async function activateSubscription(ctx: AppCtx, userId: string, kind: 's
   end.setUTCMonth(end.getUTCMonth() + COMMITMENT_MONTHS);
   await db
     .update(subscriptions)
-    .set({ status: 'active', cancelledAt: null, commitmentEndsAt: end, installmentsPaid: kind === 'renewal' ? 1 : Math.max(1, sub.installmentsPaid), updatedAt: now })
+    .set({
+      status: 'active',
+      cancelledAt: null,
+      commitmentEndsAt: end,
+      installmentsPaid: 1,
+      store: pay.channel ?? 'web',
+      storeTransactionId: pay.transactionId ?? null,
+      updatedAt: now,
+    })
     .where(eq(subscriptions.id, sub.id));
   const [u] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  await track(db, kind === 'renewal' ? 'abbonamento_rinnovato' : 'abbonamento_attivato', { userId, structureId: u?.structureId, channel: u?.acquisitionChannel });
+  const priceEur = pay.priceEur ?? PRICE_YEARLY_EUR;
+  await track(
+    db,
+    kind === 'renewal' ? 'abbonamento_rinnovato' : 'abbonamento_attivato',
+    { userId, structureId: u?.structureId, channel: u?.acquisitionChannel },
+    { purchase: pay.channel ?? 'web', priceEur },
+  );
 
-  // Punti al personal trainer con cui il cliente è collegato in questo momento.
-  const [link] = await db.select().from(clientLinks).where(and(eq(clientLinks.userId, userId), eq(clientLinks.status, 'active'))).limit(1);
+  // Punti al professionista che segue il cliente da più tempo: è lui che l'ha portato su MOTIX.
+  const [link] = (await activeLinks(db, userId)).map((l) => l.link);
   let awarded = 0;
   if (link) {
-    const rules = await getPointRules(db);
-    awarded = kind === 'renewal' ? rules.renewal : rules.subscription;
+    awarded = pointsFor(priceEur, await getPointRules(db));
     if (awarded > 0)
-      await movePoints(db, link.trainerId, kind, awarded, { subscriptionId: sub.id, note: kind === 'renewal' ? 'Rinnovo di un cliente' : 'Nuovo abbonamento di un cliente' });
+      await movePoints(db, link.trainerId, kind, awarded, {
+        subscriptionId: sub.id,
+        note: `${kind === 'renewal' ? 'Rinnovo' : 'Nuovo abbonamento'} di un cliente: ${(await getPointRules(db)).sharePct}% di €${priceEur.toFixed(2).replace('.', ',')}`,
+      });
   }
   // Amico che ha invitato: il mese gratuito gli spetta al primo abbonamento dell'invitato.
   if (kind === 'subscription')

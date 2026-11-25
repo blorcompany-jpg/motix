@@ -1,6 +1,7 @@
 import { EXERCISES } from '../data/exercises';
+import { FOODS } from '../data/foods';
 import type { Db } from '../db/client';
-import { exercises, shopProducts } from '../db/schema';
+import { exercises, foods, shopProducts } from '../db/schema';
 
 /** Carica (o aggiorna) la libreria iniziale di esercizi. Si può rilanciare senza effetti collaterali. */
 export async function ensureExerciseLibrary(db: Db) {
@@ -39,4 +40,12 @@ export async function ensureShopCatalog(db: Db) {
     { name: 'Abbigliamento', category: 'apparel', blorUrl: `${BLOR}/Abbigliamento`, position: 3 },
     { name: 'Accessori', category: 'accessories', blorUrl: `${BLOR}/Accessori`, position: 4 },
   ]);
+}
+
+/** Carica (o aggiorna) la libreria di alimenti di BTECH. Si può rilanciare senza effetti collaterali. */
+export async function ensureFoodLibrary(db: Db) {
+  for (const f of FOODS) {
+    const values = { name: f.name, category: f.category, kcal: String(f.kcal), protein: String(f.protein), carbs: String(f.carbs), fat: String(f.fat), fiber: String(f.fiber) };
+    await db.insert(foods).values({ slug: f.slug, ...values }).onConflictDoUpdate({ target: foods.slug, set: values });
+  }
 }

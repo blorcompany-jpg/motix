@@ -1,5 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
-import { COMMITMENT_MONTHS, PRICE_MONTHLY_EUR, type SubscriptionResponse } from '@motix/shared';
+import { PRICE_YEARLY_EUR, type SubscriptionResponse } from '@motix/shared';
 import type { AppCtx } from '../context';
 import { subscriptions } from '../db/schema';
 import { track } from './events';
@@ -45,8 +45,8 @@ export function describeSubscription(ctx: AppCtx, sub: Row): SubscriptionRespons
     trialDaysLeft: left,
     firstChargeAt: sub.status === 'trial' && !sub.cancelledAt ? (sub.firstChargeAt?.toISOString() ?? null) : null,
     commitmentEndsAt: sub.commitmentEndsAt?.toISOString() ?? null,
-    installmentsPaid: sub.installmentsPaid,
-    installmentsTotal: COMMITMENT_MONTHS,
-    priceMonthlyEur: PRICE_MONTHLY_EUR,
+    priceYearlyEur: PRICE_YEARLY_EUR,
+    channel: sub.status === 'active' ? (sub.store ?? null) : null,
+    webCheckoutUrl: `${ctx.config.publicWebUrl}/abbonati`,
   };
 }

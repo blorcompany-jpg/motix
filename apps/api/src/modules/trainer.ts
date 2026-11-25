@@ -1,11 +1,12 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { codeSchema, inviteClientSchema } from '@motix/shared';
+import { REGISTERED_PROFESSIONS, codeSchema, inviteClientSchema, trainerProfileSchema } from '@motix/shared';
 import { requireRole } from '../auth';
 import { clientLinks, structures, subscriptions, trainerStructures, trainers, users } from '../db/schema';
 import { badRequest, conflict, forbidden, notFound, parse } from '../lib/errors';
 import { track } from '../services/events';
+import { AREA_TAKEN_MESSAGE, areaTaken, canPrescribeNutrition } from '../services/professionals';
 import { riskFor } from '../services/risk';
 import { findUserByEmail } from '../services/users';
 
@@ -40,20 +41,27 @@ export async function trainerRoutes(app: FastifyInstance) {
       bio: t.bio,
       publicProfile: t.publicProfile,
       pointsBalance: t.pointsBalance,
+      profession: t.profession,
+      city: t.city,
+      registerName: t.registerName,
+      registerNumber: t.registerNumber,
+      registerVerified: Boolean(t.registerVerifiedAt),
+      registerRequired: REGISTERED_PROFESSIONS.includes(t.profession),
+      canPrescribeNutrition: canPrescribeNutrition(t),
     };
   });
 
   app.patch('/trainer', async (req) => {
     const { t } = await me(req, false);
-    const input = parse(
-      z.object({
-        specializations: z.array(z.string().trim().min(1).max(60)).max(12).optional(),
-        bio: z.string().trim().max(600).optional(),
-        publicProfile: z.boolean().optional(),
-      }),
-      req.body,
-    );
-    await db.update(trainers).set(input).where(eq(trainers.id, t.id));
+    const input = parse(trainerProfileSchema, req.body);
+    // Se cambiano albo o numero di iscrizione, BTECH deve verificarli di nuovo.
+    const registerChanged =
+      (input.registerName !== undefined && input.registerName !== (t.registerName ?? '')) ||
+      (input.registerNumber !== undefined && input.registerNumber !== (t.registerNumber ?? ''));
+    await db
+      .update(trainers)
+      .set({ ...input, ...(registerChanged ? { registerVerifiedAt: null } : {}) })
+      .where(eq(trainers.id, t.id));
     return { ok: true };
   });
 
@@ -140,12 +148,8 @@ export async function trainerRoutes(app: FastifyInstance) {
     const now = ctx.now();
     if (action === 'accept') {
       if (link.status !== 'requested_by_user') throw conflict('invalid_state', 'Non c’è una richiesta da accettare');
-      const [other] = await db
-        .select({ id: clientLinks.id })
-        .from(clientLinks)
-        .where(and(eq(clientLinks.userId, link.userId), eq(clientLinks.status, 'active')))
-        .limit(1);
-      if (other) throw conflict('trainer_already_linked', 'Questa persona ha già un personal trainer collegato');
+      if (await areaTaken(db, link.userId, t.profession))
+        throw conflict('trainer_already_linked', AREA_TAKEN_MESSAGE(t.profession).replace('Hai già', 'Questa persona ha già').replace(': chiudi prima quel collegamento', ''));
       await db.update(clientLinks).set({ status: 'active', startedAt: now }).where(eq(clientLinks.id, linkId));
       await track(db, 'cliente_collegato', { userId: link.userId, trainerId: t.id });
     } else if (action === 'decline') {

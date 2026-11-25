@@ -1,7 +1,7 @@
 import { and, count, desc, eq, ilike, or } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { decisionSchema } from '@motix/shared';
+import { REGISTERED_PROFESSIONS, decisionSchema } from '@motix/shared';
 import { requireRole } from '../auth';
 import { structures, subscriptions, trainers, users } from '../db/schema';
 import { conflict, notFound, parse } from '../lib/errors';
@@ -135,6 +135,12 @@ export async function adminRoutes(app: FastifyInstance) {
         statusReason: t.statusReason,
         inviteCode: t.inviteCode,
         pointsBalance: t.pointsBalance,
+        profession: t.profession,
+        city: t.city,
+        registerName: t.registerName,
+        registerNumber: t.registerNumber,
+        registerVerified: Boolean(t.registerVerifiedAt),
+        registerRequired: REGISTERED_PROFESSIONS.includes(t.profession),
         createdAt: t.createdAt,
       })),
     };
@@ -177,6 +183,20 @@ export async function adminRoutes(app: FastifyInstance) {
     await audit(db, `trainer.${action}`, { actorUserId: auth.userId, entity: 'trainer', entityId: id, ip: req.ip }, { reason });
     const [updated] = await db.select().from(trainers).where(eq(trainers.id, id)).limit(1);
     return { id, status: updated!.status };
+  });
+
+  /** Verifica dell'iscrizione all'albo (nutrizionisti e fisioterapisti), fatta da BTECH sul sito dell'ordine. */
+  app.put('/admin/trainers/:id/register', async (req) => {
+    const auth = requireRole(req, 'admin');
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const { verified } = parse(z.object({ verified: z.boolean() }), req.body);
+    const [t] = await db.select().from(trainers).where(eq(trainers.id, id)).limit(1);
+    if (!t) throw notFound('Professionista non trovato');
+    if (verified && (!t.registerName || !t.registerNumber))
+      throw conflict('register_missing', 'Il professionista non ha indicato albo e numero di iscrizione');
+    await db.update(trainers).set({ registerVerifiedAt: verified ? ctx.now() : null }).where(eq(trainers.id, id));
+    await audit(db, verified ? 'trainer.register_verified' : 'trainer.register_unverified', { actorUserId: auth.userId, entity: 'trainer', entityId: id, ip: req.ip });
+    return { id, registerVerified: verified };
   });
 
   /* ---------- Utenti e assistenza ---------- */

@@ -200,7 +200,7 @@ describe('idratazione, home e progressi', () => {
 describe('prova gratuita e versione gratuita', () => {
   it('la disdetta durante la prova non toglie subito Premium e si può annullare', async () => {
     const sub = (await get('/me/subscription')).body;
-    expect(sub).toMatchObject({ status: 'trial', premium: true, cancelled: false, trialDaysLeft: 8, installmentsTotal: 12, priceMonthlyEur: 4.99 });
+    expect(sub).toMatchObject({ status: 'trial', premium: true, cancelled: false, trialDaysLeft: 8, priceYearlyEur: 49.99, channel: null });
     const cancelled = (await post('/me/subscription/cancel')).body;
     expect(cancelled).toMatchObject({ status: 'trial', premium: true, cancelled: true, firstChargeAt: null });
     expect((await post('/me/subscription/resume')).body.cancelled).toBe(false);

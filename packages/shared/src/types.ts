@@ -1,4 +1,4 @@
-import type { ConsentType, Role, StructureType } from './constants';
+import type { AutomationKind, ConsentType, FoodCategory, HealthSource, Meal, PackageStatus, Profession, PurchaseChannel, Role, StructureType } from './constants';
 
 export type UserStatus = 'active' | 'pending_parental_consent' | 'suspended' | 'deleted';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
@@ -30,7 +30,17 @@ export interface MeResponse {
     trialDaysLeft: number | null;
     firstChargeAt: string | null;
   } | null;
-  trainer: { id: string; status: ApprovalStatus; inviteCode: string; pointsBalance: number } | null;
+  trainer: {
+    id: string;
+    status: ApprovalStatus;
+    inviteCode: string;
+    pointsBalance: number;
+    profession: Profession;
+    /** Albo verificato da BTECH (serve a nutrizionisti e fisioterapisti). */
+    registerVerified: boolean;
+    /** Può creare piani alimentari: nutrizionista approvato con albo verificato. */
+    canPrescribeNutrition: boolean;
+  } | null;
   ownedStructure: (StructureSummary & { status: ApprovalStatus; code: string | null }) | null;
   instructorOf: StructureSummary | null;
   /** Funzioni Premium attive: prova in corso o abbonamento attivo. */
@@ -261,9 +271,12 @@ export interface SubscriptionResponse {
   trialDaysLeft: number | null;
   firstChargeAt: string | null;
   commitmentEndsAt: string | null;
-  installmentsPaid: number;
-  installmentsTotal: number;
-  priceMonthlyEur: number;
+  /** Prezzo annuale IVA inclusa. */
+  priceYearlyEur: number;
+  /** Dove è stato comprato l'abbonamento attivo. */
+  channel: PurchaseChannel | null;
+  /** Indirizzo del sito dove comprarlo allo stesso prezzo, senza passare dallo store. */
+  webCheckoutUrl: string;
 }
 
 /* ---------- Personal trainer e struttura ---------- */
@@ -439,8 +452,152 @@ export interface TrainerVideoView {
 
 export interface PointsResponse {
   balance: number;
-  rules: { subscription: number; renewal: number };
+  rules: { sharePct: number; pointValueEur: number; pointsPerSubscription: number };
   movements: Array<{ id: string; reason: 'subscription' | 'renewal' | 'bonus' | 'redemption' | 'adjustment'; points: number; balanceAfter: number; note: string | null; at: string }>;
   rewards: Array<{ id: string; name: string; description: string | null; pointsRequired: number; available: boolean }>;
   redemptions: Array<{ id: string; reward: string; points: number; status: 'requested' | 'approved' | 'rejected' | 'delivered'; at: string }>;
+}
+
+/* ---------- Professionisti: template, check-in, automazioni ---------- */
+
+export interface PlanTemplate {
+  id: string;
+  name: string;
+  note: string | null;
+  sessions: Array<{
+    title: string;
+    dayOffset: number;
+    exercises: Array<{ exerciseId: string; name: string; unit: 'reps' | 'seconds' | 'minutes'; loadable: boolean; sets: number; reps: number; loadKg: number | null; restSeconds: number }>;
+  }>;
+  updatedAt: string;
+}
+
+export interface CheckIn {
+  id: string;
+  day: string;
+  weightKg: number | null;
+  waistCm: number | null;
+  energy: number | null;
+  sleep: number | null;
+  stress: number | null;
+  training: number | null;
+  nutrition: number | null;
+  notes: string | null;
+  photos: string[];
+  comment: string | null;
+  commentBy: string | null;
+  commentedAt: string | null;
+  createdAt: string;
+}
+
+export interface CheckInsResponse {
+  checkIns: CheckIn[];
+  /** Ogni quanti giorni il professionista chiede il check-in; null se non lo chiede nessuno. */
+  everyDays: number | null;
+  /** Giorno in cui è atteso il prossimo check-in. */
+  nextDue: string | null;
+}
+
+export interface Automation {
+  kind: AutomationKind;
+  enabled: boolean;
+  text: string;
+}
+
+export interface ExerciseHistory {
+  exercise: { id: string; name: string; unit: 'reps' | 'seconds' | 'minutes'; loadable: boolean };
+  /** Una riga per seduta: la serie migliore e il volume totale. */
+  points: Array<{ day: string; bestKg: number | null; bestReps: number; volumeKg: number; sets: number }>;
+  bestKg: number | null;
+}
+
+export interface ExerciseRecords {
+  records: Array<{ exerciseId: string; name: string; bestKg: number; day: string; sessions: number }>;
+}
+
+export interface HealthDay {
+  day: string;
+  steps: number | null;
+  sleepMinutes: number | null;
+  restingHr: number | null;
+  activeKcal: number | null;
+  source: HealthSource;
+}
+
+/* ---------- Alimentazione ---------- */
+
+export interface Food {
+  id: string;
+  name: string;
+  category: FoodCategory;
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  custom: boolean;
+}
+
+export interface Macros {
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export interface MealItemView {
+  foodId: string;
+  name: string;
+  grams: number;
+  macros: Macros;
+}
+
+export interface MealPlanView {
+  id: string;
+  title: string;
+  notes: string | null;
+  nutritionist: string;
+  createdAt: string;
+  days: Array<{
+    name: string;
+    totals: Macros;
+    meals: Array<{ meal: Meal; time: string | null; items: MealItemView[]; totals: Macros; alternatives: Array<{ items: MealItemView[]; totals: Macros }> }>;
+  }>;
+}
+
+export interface FoodDiaryDay {
+  day: string;
+  entries: Array<{ id: string; meal: Meal; foodId: string; name: string; grams: number; macros: Macros }>;
+  totals: Macros;
+  /** Media giornaliera del piano del nutrizionista, se c'è. */
+  target: Macros | null;
+}
+
+/* ---------- Vetrina dei professionisti ---------- */
+
+export interface ProfessionalCard {
+  id: string;
+  userId: string;
+  name: string;
+  profession: Profession;
+  city: string | null;
+  specializations: string[];
+  bio: string | null;
+  verified: boolean;
+  avatarUrl: string | null;
+  clients: number;
+}
+
+export interface ProfessionalProfile extends ProfessionalCard {
+  videos: Array<{ id: string; title: string; url: string }>;
+  structures: Array<{ displayName: string; city: string }>;
+}
+
+/* ---------- Pacchetti per le palestre ---------- */
+
+export interface StructurePackagesResponse {
+  rules: { minSeats: number; unitPriceEur: number; listPriceEur: number };
+  packages: Array<{ id: string; seats: number; unitPriceEur: number; totalEur: number; status: PackageStatus; createdAt: string; paidAt: string | null; used: number }>;
+  seatsAvailable: number;
+  seats: Array<{ id: string; user: { id: string; name: string } | null; assignedAt: string | null; endsAt: string | null }>;
 }

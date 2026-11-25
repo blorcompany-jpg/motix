@@ -1,11 +1,12 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { REQUIRED_CONSENTS, codeSchema, updateConsentsSchema } from '@motix/shared';
+import { REQUIRED_CONSENTS, codeSchema, updateConsentsSchema, type Profession } from '@motix/shared';
 import { requireAuth, requireRole } from '../auth';
 import { clientLinks, mediaFiles, refreshTokens, structures, trainers, users } from '../db/schema';
 import { badRequest, conflict, notFound, parse } from '../lib/errors';
 import { audit, track } from '../services/events';
+import { AREA_TAKEN_MESSAGE, areaTaken } from '../services/professionals';
 import { buildMe, getConsents, setConsents } from '../services/users';
 
 export async function meRoutes(app: FastifyInstance) {
@@ -81,19 +82,16 @@ export async function meRoutes(app: FastifyInstance) {
         firstName: users.firstName,
         lastName: users.lastName,
         specializations: trainers.specializations,
+        profession: trainers.profession,
       })
       .from(clientLinks)
       .innerJoin(trainers, eq(trainers.id, clientLinks.trainerId))
       .innerJoin(users, eq(users.id, trainers.userId))
       .where(and(eq(clientLinks.userId, userId), inArray(clientLinks.status, ['active', 'requested_by_user', 'requested_by_trainer'])));
 
-  const hasActiveLink = async (userId: string) => {
-    const [row] = await db
-      .select({ id: clientLinks.id })
-      .from(clientLinks)
-      .where(and(eq(clientLinks.userId, userId), eq(clientLinks.status, 'active')))
-      .limit(1);
-    return Boolean(row);
+  /** Un professionista per area: allenamento e alimentazione. */
+  const assertAreaFree = async (userId: string, profession: Profession) => {
+    if (await areaTaken(db, userId, profession)) throw conflict('trainer_already_linked', AREA_TAKEN_MESSAGE(profession));
   };
 
   app.get('/me/trainer-links', async (req) => ({ links: await myLinks(requireRole(req, 'user').userId) }));
@@ -108,8 +106,7 @@ export async function meRoutes(app: FastifyInstance) {
       .where(and(eq(trainers.inviteCode, code), eq(trainers.status, 'approved')))
       .limit(1);
     if (!t) throw badRequest('trainer_code_invalid', 'Codice del personal trainer non valido', { code: 'Codice non valido' });
-    if (await hasActiveLink(auth.userId))
-      throw conflict('trainer_already_linked', 'Hai già un personal trainer collegato: chiudi prima quel collegamento');
+    await assertAreaFree(auth.userId, t.profession);
     const consents = await getConsents(db, auth.userId);
     // Un'eventuale richiesta in sospeso con lo stesso personal trainer viene sostituita.
     await db
@@ -143,8 +140,7 @@ export async function meRoutes(app: FastifyInstance) {
       .where(and(eq(trainers.id, trainerId), eq(trainers.status, 'approved')))
       .limit(1);
     if (!t) throw notFound('Personal trainer non trovato');
-    if (await hasActiveLink(auth.userId))
-      throw conflict('trainer_already_linked', 'Hai già un personal trainer collegato: chiudi prima quel collegamento');
+    await assertAreaFree(auth.userId, t.profession);
     const [pending] = await db
       .select({ id: clientLinks.id })
       .from(clientLinks)
@@ -176,8 +172,8 @@ export async function meRoutes(app: FastifyInstance) {
     const now = ctx.now();
     if (action === 'accept') {
       if (link.status !== 'requested_by_trainer') throw conflict('invalid_state', 'Non c’è un invito da accettare');
-      if (await hasActiveLink(auth.userId))
-        throw conflict('trainer_already_linked', 'Hai già un personal trainer collegato: chiudi prima quel collegamento');
+      const [t] = await db.select({ profession: trainers.profession }).from(trainers).where(eq(trainers.id, link.trainerId)).limit(1);
+      await assertAreaFree(auth.userId, t?.profession ?? 'personal_trainer');
       const consents = await getConsents(db, auth.userId);
       await db
         .update(clientLinks)

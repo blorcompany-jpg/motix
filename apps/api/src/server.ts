@@ -5,14 +5,16 @@ import { openDb } from './db/client';
 import { createAiClient } from './lib/ai';
 import { DevMailer } from './lib/mailer';
 import { LocalStorage } from './lib/storage';
-import { demoHome, seedDemo } from './services/demo';
-import { ensureExerciseLibrary, ensureShopCatalog } from './services/library';
+import { demoHome, seedDemo, seedDemoProfessionals } from './services/demo';
+import { runAutomations } from './services/automations';
+import { ensureExerciseLibrary, ensureFoodLibrary, ensureShopCatalog } from './services/library';
 
 const config = loadConfig();
 const handle = await openDb(config.databaseUrl);
 await handle.migrate();
 await ensureExerciseLibrary(handle.db);
 await ensureShopCatalog(handle.db);
+await ensureFoodLibrary(handle.db);
 
 // L'orologio si sposta solo mentre si creano i dati di esempio dell'ambiente di prova.
 let clockOffsetMs = 0;
@@ -44,7 +46,20 @@ if (config.demoPassword) {
     return false;
   });
   app.log.info(created ? 'Dati di esempio creati' : 'Dati di esempio già presenti o non creati');
+  const extra = await seedDemoProfessionals(app, ctx, config.demoPassword, hosted ? '/api' : '').catch((e) => {
+    app.log.error(e);
+    return false;
+  });
+  if (extra) app.log.info('Dati di esempio dei professionisti creati');
 }
+
+// Messaggi automatici dei professionisti: controllo ogni ora. Ogni messaggio parte una volta sola.
+const automations = setInterval(() => {
+  runAutomations(ctx)
+    .then((r) => r.sent && app.log.info(`Messaggi automatici inviati: ${r.sent}`))
+    .catch((e) => app.log.error(e));
+}, 60 * 60 * 1000);
+automations.unref();
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.on(signal, async () => {

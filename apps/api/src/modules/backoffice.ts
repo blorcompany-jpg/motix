@@ -1,12 +1,12 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { pointRulesSchema, rewardSchema, shopProductSchema } from '@motix/shared';
+import { activationSchema, pointRulesSchema, rewardSchema, shopProductSchema } from '@motix/shared';
 import { requireRole } from '../auth';
 import { postComments, posts, reports, rewardRedemptions, rewards, shopProducts, trainerVideos, trainers, users } from '../db/schema';
 import { conflict, notFound, parse } from '../lib/errors';
 import { audit } from '../services/events';
-import { activateSubscription, getPointRules, movePoints, setPointRules } from '../services/points';
+import { activateSubscription, describePointRules, getPointRules, movePoints, setPointRules } from '../services/points';
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -147,7 +147,7 @@ export async function backofficeRoutes(app: FastifyInstance) {
       .orderBy(desc(rewardRedemptions.createdAt))
       .limit(200);
     return {
-      rules: await getPointRules(db),
+      rules: describePointRules(await getPointRules(db)),
       rewards: await db.select().from(rewards).orderBy(asc(rewards.pointsRequired)),
       redemptions: pending.map((x) => ({ id: x.r.id, reward: x.reward, points: x.r.points, status: x.r.status, at: x.r.createdAt.toISOString(), trainer: `${x.firstName} ${x.lastName}`, email: x.email })),
     };
@@ -205,13 +205,14 @@ export async function backofficeRoutes(app: FastifyInstance) {
   });
 
   /**
-   * Attivazione o rinnovo manuale di un abbonamento (pilot e assistenza). Assegna i punti al personal trainer del cliente.
-   * Con gli abbonamenti in-app questa operazione arriverà in automatico dallo store.
+   * Attivazione o rinnovo manuale di un abbonamento (pilot e assistenza). Assegna i punti al professionista del cliente.
+   * Indica dove è stato pagato (store, sito). Con le conferme automatiche di store e sito arriverà da sola.
    */
   app.post('/admin/users/:id/subscription/:kind', async (req) => {
     const auth = requireRole(req, 'admin');
     const { id, kind } = parse(idParam.extend({ kind: z.enum(['activate', 'renew']) }), req.params);
-    const result = await activateSubscription(ctx, id, kind === 'activate' ? 'subscription' : 'renewal');
+    const pay = parse(activationSchema, req.body ?? {});
+    const result = await activateSubscription(ctx, id, kind === 'activate' ? 'subscription' : 'renewal', pay);
     await audit(db, `subscription.${kind}`, { actorUserId: auth.userId, entity: 'user', entityId: id, ip: req.ip }, result);
     return result;
   });
