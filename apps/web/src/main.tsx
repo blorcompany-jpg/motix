@@ -6,6 +6,7 @@ import '@fontsource/sora/700.css';
 import '@fontsource/sora/800.css';
 import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Subscribe } from './pages/Subscribe';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth';
 import { Dashboard } from './pages/Dashboard';
@@ -39,6 +40,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/pt/registrazione" element={<Guest><RegisterTrainer /></Guest>} />
           <Route path="/pt/:code" element={<JoinLanding kind="trainer" />} />
           <Route path="/j/:code" element={<JoinLanding kind="structure" />} />
+          <Route path="/abbonati" element={<Subscribe />} />
           <Route path="/consenso-genitore" element={<ParentalConsent />} />
           <Route path="/invito-staff" element={<StaffInvite />} />
           <Route path="/verifica-email" element={<VerifyEmail />} />

@@ -11,9 +11,10 @@ import {
 import { api, download } from '../../api';
 import { Badge, ErrorBox, Field } from '../../ui';
 import { StructureSensors } from './Sensors';
+import { StructurePackages } from './Packages';
 import { Messages, ReportView, RiskBadge, Stat, Tabs, date, shortDay, useLoad } from './common';
 
-type Tab = 'home' | 'members' | 'alerts' | 'messages' | 'staff' | 'sensors' | 'report';
+type Tab = 'home' | 'members' | 'alerts' | 'messages' | 'staff' | 'sensors' | 'packages' | 'report';
 const memberName = (m: MemberRow) => (m.sharesData ? `${m.firstName} ${m.lastName}` : 'Dati non condivisi');
 const monthLabel = (m: string) => new Date(`${m}-15T12:00:00`).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
 
@@ -141,7 +142,7 @@ export function StructureDashboard({ me }: { me: MeResponse }) {
     );
 
   const tabs = isOwner
-    ? { home: 'Panoramica', members: 'Iscritti', alerts: 'Alert', messages: 'Messaggi', staff: 'Staff', sensors: 'Sensori', report: 'Report' }
+    ? { home: 'Panoramica', members: 'Iscritti', alerts: 'Alert', messages: 'Messaggi', staff: 'Staff', sensors: 'Sensori', packages: 'Pacchetti', report: 'Report' }
     : { members: 'I miei iscritti', alerts: 'Alert', messages: 'Messaggi' };
   const o = overview.data;
 
@@ -285,6 +286,7 @@ export function StructureDashboard({ me }: { me: MeResponse }) {
       )}
 
       {tab === 'sensors' && isOwner && <StructureSensors />}
+      {tab === 'packages' && isOwner && <StructurePackages />}
 
       {tab === 'staff' && (
         <div className="stack">

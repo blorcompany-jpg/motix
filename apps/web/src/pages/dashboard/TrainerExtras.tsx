@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import type { PointsResponse, TrainerVideoView } from '@motix/shared';
+import { euro as euroOf, type PointsResponse, type TrainerVideoView } from '@motix/shared';
 import { api, upload } from '../../api';
 import { Badge, ErrorBox, Field } from '../../ui';
 import { date, useLoad } from './common';
@@ -120,8 +120,8 @@ export function TrainerPoints({ onBalance }: { onBalance: (n: number) => void })
             </div>
             <div className="card stack tight">
               <h3>Come si guadagnano</h3>
-              <p style={{ fontSize: 14 }}>• {p.rules.subscription} punti quando un tuo cliente si abbona dopo la prova</p>
-              <p style={{ fontSize: 14 }}>• {p.rules.renewal} punti a ogni rinnovo annuale di un cliente</p>
+              <p style={{ fontSize: 14 }}>• Per ogni tuo cliente che si abbona ricevi in punti il {p.rules.sharePct}% di quello che paga: con l’abbonamento annuale sono {p.rules.pointsPerSubscription} punti</p>
+              <p style={{ fontSize: 14 }}>• Lo stesso a ogni rinnovo. Un punto vale {euroOf(p.rules.pointValueEur)} in premi fisici e buoni regalo</p>
               <p className="muted">I punti arrivano dopo il primo addebito: una prova disdetta non ne genera.</p>
             </div>
           </div>

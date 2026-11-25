@@ -3,6 +3,7 @@ import type { ClientReport, MeResponse, PlanEditorResponse, PlanEditorSession, R
 import { api } from '../../api';
 import { Badge, ErrorBox, Field } from '../../ui';
 import { Messages, ReportView, RiskBadge, Tabs, useLoad } from './common';
+import { AutomationsPanel, CheckInsPanel, HealthPanel, LoadsPanel, MealPlanPanel, ProfilePanel, TemplateLibrary, TemplateTools } from './Professional';
 import { TrainerPoints, TrainerVideos } from './TrainerExtras';
 
 interface ClientRow {
@@ -182,9 +183,17 @@ function PlanEditor({ linkId, canDraft }: { linkId: string; canDraft: boolean })
   );
 }
 
-function ClientPage({ row, onBack, onMessage }: { row: ClientRow; onBack: () => void; onMessage: () => void }) {
-  const [tab, setTab] = useState<'report' | 'plan'>(row.dataConsent ? 'report' : 'plan');
+type ClientTab = 'report' | 'plan' | 'checkins' | 'loads' | 'health' | 'nutrition';
+
+function ClientPage({ row, trainer, onBack, onMessage }: { row: ClientRow; trainer: NonNullable<MeResponse['trainer']>; onBack: () => void; onMessage: () => void }) {
+  const nutritionist = trainer.profession === 'nutritionist';
+  const [tab, setTab] = useState<ClientTab>(nutritionist ? (trainer.canPrescribeNutrition ? 'nutrition' : 'checkins') : row.dataConsent ? 'report' : 'plan');
+  const [planKey, setPlanKey] = useState(0);
   const report = useLoad<ClientReport>(row.dataConsent && tab === 'report' ? `/trainer/clients/${row.linkId}/report` : null);
+  const tabs: Partial<Record<ClientTab, string>> = nutritionist
+    ? { ...(trainer.canPrescribeNutrition ? { nutrition: 'Piano alimentare' } : {}), checkins: 'Check-in', health: 'App salute' }
+    : { report: 'Report', plan: 'Piano', checkins: 'Check-in', loads: 'Carichi', health: 'App salute' };
+  const noData = <div className="alert info">Questo cliente non ha dato il consenso a condividere i suoi dati con te: questa sezione non è disponibile.</div>;
   return (
     <div className="stack">
       <div className="row between">
@@ -192,7 +201,7 @@ function ClientPage({ row, onBack, onMessage }: { row: ClientRow; onBack: () => 
         <button className="btn small" onClick={onMessage}>Scrivi un messaggio</button>
       </div>
       <h2>{row.client.firstName} {row.client.lastName}</h2>
-      <Tabs tabs={{ report: 'Report', plan: 'Piano' }} value={tab} onChange={setTab} />
+      <Tabs tabs={tabs as Record<ClientTab, string>} value={tab} onChange={setTab} />
       {tab === 'report' && (
         <>
           <ErrorBox error={report.error} />
@@ -200,7 +209,16 @@ function ClientPage({ row, onBack, onMessage }: { row: ClientRow; onBack: () => 
           {report.data && <ReportView report={report.data} />}
         </>
       )}
-      {tab === 'plan' && <PlanEditor linkId={row.linkId} canDraft={row.dataConsent} />}
+      {tab === 'plan' && (
+        <>
+          <TemplateTools linkId={row.linkId} onApplied={() => setPlanKey((k) => k + 1)} />
+          <PlanEditor key={planKey} linkId={row.linkId} canDraft={row.dataConsent} />
+        </>
+      )}
+      {tab === 'checkins' && (row.dataConsent ? <CheckInsPanel linkId={row.linkId} /> : noData)}
+      {tab === 'loads' && (row.dataConsent ? <LoadsPanel linkId={row.linkId} /> : noData)}
+      {tab === 'health' && (row.dataConsent ? <HealthPanel linkId={row.linkId} /> : noData)}
+      {tab === 'nutrition' && <MealPlanPanel linkId={row.linkId} canSeeDiary={row.dataConsent} />}
     </div>
   );
 }
@@ -208,7 +226,8 @@ function ClientPage({ row, onBack, onMessage }: { row: ClientRow; onBack: () => 
 export function TrainerArea({ me }: { me: MeResponse }) {
   const t = me.trainer!;
   const approved = t.status === 'approved';
-  const [tab, setTab] = useState<'clients' | 'messages' | 'videos' | 'points' | 'structures'>('clients');
+  type Tab = 'clients' | 'templates' | 'automations' | 'messages' | 'videos' | 'points' | 'structures' | 'profile';
+  const [tab, setTab] = useState<Tab>('clients');
   const [balance, setBalance] = useState(t.pointsBalance);
   const [open, setOpen] = useState<ClientRow | null>(null);
   const [chatWith, setChatWith] = useState<string | null>(null);
@@ -237,6 +256,7 @@ export function TrainerArea({ me }: { me: MeResponse }) {
     return (
       <ClientPage
         row={open}
+        trainer={t}
         onBack={() => { setOpen(null); void clients.reload(); }}
         onMessage={() => { setChatWith(open.client.id); setOpen(null); setTab('messages'); }}
       />
@@ -261,10 +281,23 @@ export function TrainerArea({ me }: { me: MeResponse }) {
         <div className="card stack tight">
           <span className="eyebrow">Punti</span>
           <div className="stat"><b>{balance}</b></div>
-          <p style={{ fontSize: 14 }}>Guadagni punti per ogni cliente che si abbona e rinnova; li converti in premi.</p>
+          <p style={{ fontSize: 14 }}>Per ogni cliente che si abbona ricevi in punti il 20% di quello che paga, anche ai rinnovi. Li converti in premi e buoni regalo.</p>
         </div>
       </div>
-      <Tabs tabs={{ clients: 'Clienti', messages: 'Messaggi', videos: 'Video', points: 'Punti e premi', structures: 'Strutture' }} value={tab} onChange={(v) => { setTab(v); setNotice(''); setError(null); }} />
+      <Tabs
+        tabs={{
+          clients: 'Clienti',
+          ...(t.profession !== 'nutritionist' ? { templates: 'Template' } : {}),
+          automations: 'Automazioni',
+          messages: 'Messaggi',
+          videos: 'Video',
+          points: 'Punti e premi',
+          structures: 'Strutture',
+          profile: 'Profilo',
+        } as Record<Tab, string>}
+        value={tab}
+        onChange={(v) => { setTab(v); setNotice(''); setError(null); }}
+      />
       <ErrorBox error={error ?? clients.error} />
       {notice && <div className="alert ok" style={{ marginBottom: 16 }}>{notice}</div>}
 
@@ -315,6 +348,9 @@ export function TrainerArea({ me }: { me: MeResponse }) {
         </div>
       )}
 
+      {tab === 'templates' && (approved ? <TemplateLibrary /> : <div className="card empty">Potrai creare i template dopo l’approvazione del profilo.</div>)}
+      {tab === 'automations' && (approved ? <AutomationsPanel /> : <div className="card empty">Le automazioni si attivano dopo l’approvazione del profilo.</div>)}
+      {tab === 'profile' && <ProfilePanel />}
       {tab === 'messages' && <Messages openWith={chatWith} emptyHint="Nessuna conversazione: apri un cliente e scegli «Scrivi un messaggio»." />}
 
       {tab === 'videos' && (approved ? <TrainerVideos /> : <div className="card empty">Potrai caricare i video dopo l’approvazione del profilo.</div>)}

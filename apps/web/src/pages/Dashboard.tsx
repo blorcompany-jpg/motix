@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { ROLE_LABELS, STRUCTURE_TYPE_LABELS, type StructureType } from '@motix/shared';
+import { PROFESSION_LABELS, PURCHASE_CHANNELS, PURCHASE_CHANNEL_LABELS, ROLE_LABELS, STRUCTURE_TYPE_LABELS, type Profession, type PurchaseChannel, type StructureType } from '@motix/shared';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { Badge, ErrorBox, Field, Logo } from '../ui';
 import { Stat, Tabs, date, useLoad } from './dashboard/common';
-import { Moderation, RewardsAdmin, ShopAdmin } from './dashboard/AdminExtras';
+import { Moderation, PackagesAdmin, RewardsAdmin, ShopAdmin } from './dashboard/AdminExtras';
 import { SensorsAdmin } from './dashboard/Sensors';
 import { StructureDashboard } from './dashboard/Owner';
 import { TrainerArea } from './dashboard/Trainer';
@@ -12,7 +12,8 @@ import { TrainerArea } from './dashboard/Trainer';
 /* ================= Pannello BTECH ================= */
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'structures' | 'trainers' | 'users' | 'sensors' | 'moderation' | 'shop' | 'rewards'>('structures');
+  const [tab, setTab] = useState<'structures' | 'trainers' | 'users' | 'packages' | 'sensors' | 'moderation' | 'shop' | 'rewards'>('structures');
+  const [channel, setChannel] = useState<PurchaseChannel>('web');
   const [filter, setFilter] = useState('pending');
   const overview = useLoad<any>('/admin/overview');
   const structures = useLoad<{ structures: any[] }>(tab === 'structures' ? `/admin/structures${filter ? `?status=${filter}` : ''}` : null);
@@ -67,11 +68,11 @@ function AdminPanel() {
     <>
       <div className="grid4" style={{ marginBottom: 20 }}>
         <Stat value={o?.structures?.approved ?? 0} label={`Strutture affiliate · ${o?.structures?.pending ?? 0} in attesa`} />
-        <Stat value={o?.trainers?.approved ?? 0} label={`Personal trainer · ${o?.trainers?.pending ?? 0} in attesa`} />
+        <Stat value={o?.trainers?.approved ?? 0} label={`Professionisti · ${o?.trainers?.pending ?? 0} in attesa`} />
         <Stat value={o?.users ?? 0} label="Utenti registrati" />
         <Stat value={o?.subscriptions?.active ?? 0} label={`Abbonati · ${o?.subscriptions?.trial ?? 0} in prova`} />
       </div>
-      <Tabs tabs={{ structures: 'Strutture', trainers: 'Personal trainer', users: 'Utenti', sensors: 'Sensori', moderation: 'Moderazione', shop: 'Shop', rewards: 'Punti e premi' }} value={tab} onChange={setTab} />
+      <Tabs tabs={{ structures: 'Strutture', trainers: 'Professionisti', users: 'Utenti', packages: 'Pacchetti palestre', sensors: 'Sensori', moderation: 'Moderazione', shop: 'Shop', rewards: 'Punti e premi' }} value={tab} onChange={setTab} />
       <ErrorBox error={error ?? structures.error ?? trainers.error} />
 
       {tab === 'structures' && (
@@ -103,12 +104,31 @@ function AdminPanel() {
           {filterBar}
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Personal trainer</th><th>Specializzazioni</th><th>Stato</th><th>Codice</th><th>Punti</th><th /></tr></thead>
+              <thead><tr><th>Professionista</th><th>Professione</th><th>Albo</th><th>Stato</th><th>Codice</th><th>Punti</th><th /></tr></thead>
               <tbody>
                 {trainers.data?.trainers.map((t) => (
                   <tr key={t.id}>
                     <td>{t.firstName} {t.lastName}<div className="muted">{t.email}</div></td>
-                    <td>{t.specializations.join(', ') || '—'}</td>
+                    <td>{PROFESSION_LABELS[t.profession as Profession]}<div className="muted">{[t.city, t.specializations.join(', ')].filter(Boolean).join(' · ') || '—'}</div></td>
+                    <td>
+                      {t.registerRequired ? (
+                        <div className="stack tight">
+                          <span style={{ fontSize: 13 }}>{t.registerName ?? '—'} · n. {t.registerNumber ?? '—'}</span>
+                          <div className="row">
+                            <Badge status={t.registerVerified ? 'approved' : 'pending'} label={t.registerVerified ? 'Verificato' : 'Da verificare'} />
+                            <button
+                              className="btn ghost small"
+                              onClick={() =>
+                                (t.registerVerified || window.confirm(`Hai controllato sul sito dell’ordine che ${t.firstName} ${t.lastName} è iscritto con il numero ${t.registerNumber}?`)) &&
+                                void api('PUT', `/admin/trainers/${t.id}/register`, { verified: !t.registerVerified }).then(() => trainers.reload(), setError)
+                              }
+                            >
+                              {t.registerVerified ? 'Annulla verifica' : 'Segna come verificato'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : <span className="muted">Non richiesto</span>}
+                    </td>
                     <td><Badge status={t.status} /></td>
                     <td>{t.inviteCode}</td>
                     <td>{t.pointsBalance}</td>
@@ -118,7 +138,7 @@ function AdminPanel() {
               </tbody>
             </table>
           </div>
-          {trainers.data?.trainers.length === 0 && <div className="empty">Nessun personal trainer in questo elenco.</div>}
+          {trainers.data?.trainers.length === 0 && <div className="empty">Nessun professionista in questo elenco.</div>}
         </div>
       )}
 
@@ -126,6 +146,7 @@ function AdminPanel() {
       {tab === 'moderation' && <Moderation />}
       {tab === 'shop' && <ShopAdmin />}
       {tab === 'rewards' && <RewardsAdmin />}
+      {tab === 'packages' && <PackagesAdmin />}
 
       {tab === 'users' && (
         <div className="stack">
@@ -134,6 +155,12 @@ function AdminPanel() {
               <Field label="Cerca per nome o email" value={q} onChange={(e) => setQ(e.target.value)} minLength={2} required />
             </div>
             <button className="btn">Cerca</button>
+            <label className="field" style={{ width: 220 }}>
+              Pagato con (per le attivazioni)
+              <select value={channel} onChange={(e) => setChannel(e.target.value as PurchaseChannel)}>
+                {PURCHASE_CHANNELS.filter((c) => c !== 'structure').map((c) => <option key={c} value={c}>{PURCHASE_CHANNEL_LABELS[c]}</option>)}
+              </select>
+            </label>
           </form>
           {users && (
             <div className="card">
@@ -153,11 +180,11 @@ function AdminPanel() {
                             <button
                               className="btn ghost small"
                               onClick={async () => {
-                                if (!window.confirm(`Attivare l’abbonamento di ${u.firstName} ${u.lastName}? Se ha un personal trainer, gli vengono assegnati i punti.`)) return;
+                                if (!window.confirm(`Attivare l’abbonamento annuale di ${u.firstName} ${u.lastName}, pagato con ${PURCHASE_CHANNEL_LABELS[channel]}? Se ha un professionista, gli viene assegnato il 20% in punti.`)) return;
                                 setError(null);
                                 try {
-                                  const r = await api<{ points: number }>('POST', `/admin/users/${u.id}/subscription/activate`);
-                                  window.alert(r.points ? `Abbonamento attivato: ${r.points} punti al personal trainer.` : 'Abbonamento attivato.');
+                                  const r = await api<{ points: number }>('POST', `/admin/users/${u.id}/subscription/activate`, { channel });
+                                  window.alert(r.points ? `Abbonamento attivato: ${r.points} punti al professionista.` : 'Abbonamento attivato.');
                                 } catch (e) {
                                   setError(e);
                                 }
@@ -207,7 +234,7 @@ export function Dashboard() {
       {user.role === 'user' && (
         <div className="card stack">
           <h2>Il tuo allenamento è nell’app</h2>
-          <p>Questo sito è l’area di strutture, personal trainer e team BTECH. Per piano, sedute, idratazione e community usa l’app MOTIX sul telefono.</p>
+          <p>Questo sito è l’area di strutture, professionisti e team BTECH. Per piano, sedute, idratazione e community usa l’app MOTIX sul telefono.</p>
         </div>
       )}
     </div>

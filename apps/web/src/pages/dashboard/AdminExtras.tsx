@@ -133,13 +133,13 @@ export function ShopAdmin() {
 
 /** Punti e premi: valore dei punti, catalogo e richieste dei personal trainer. */
 export function RewardsAdmin() {
-  const state = useLoad<{ rules: { subscription: number; renewal: number }; rewards: any[]; redemptions: any[] }>('/admin/rewards');
-  const [rules, setRules] = useState<{ subscription: string; renewal: string } | null>(null);
+  const state = useLoad<{ rules: { sharePct: number; pointValueEur: number; pointsPerSubscription: number }; rewards: any[]; redemptions: any[] }>('/admin/rewards');
+  const [rules, setRules] = useState<{ sharePct: string; pointValueEur: string } | null>(null);
   const [f, setF] = useState({ name: '', description: '', pointsRequired: '', stock: '' });
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState('');
   const s = state.data;
-  const r = rules ?? (s ? { subscription: String(s.rules.subscription), renewal: String(s.rules.renewal) } : { subscription: '', renewal: '' });
+  const r = rules ?? (s ? { sharePct: String(s.rules.sharePct), pointValueEur: String(s.rules.pointValueEur) } : { sharePct: '', pointValueEur: '' });
   const run = async (fn: () => Promise<any>, ok?: string) => {
     setError(null);
     setNotice('');
@@ -156,13 +156,15 @@ export function RewardsAdmin() {
     <div className="stack">
       <ErrorBox error={error ?? state.error} />
       {notice && <div className="alert ok">{notice}</div>}
-      <form className="card stack" onSubmit={(e) => { e.preventDefault(); void run(() => api('PUT', '/admin/points/rules', { subscription: Number(r.subscription), renewal: Number(r.renewal) }), 'Valore dei punti aggiornato'); }}>
-        <h3>Valore dei punti</h3>
+      <form className="card stack" onSubmit={(e) => { e.preventDefault(); void run(() => api('PUT', '/admin/points/rules', { sharePct: Number(r.sharePct), pointValueEur: Number(r.pointValueEur) }), 'Valore dei punti aggiornato'); }}>
+        <h3>Quota dei professionisti in punti</h3>
+        <p className="muted">Per ogni abbonato portato da un professionista: percentuale di quanto ha pagato, alla sottoscrizione e a ogni rinnovo.</p>
         <div className="row" style={{ alignItems: 'flex-end' }}>
-          <div style={{ width: 220 }}><Field label="Punti per un nuovo abbonamento" type="number" min={0} value={r.subscription} onChange={(e) => setRules({ ...r, subscription: e.target.value })} /></div>
-          <div style={{ width: 220 }}><Field label="Punti per un rinnovo" type="number" min={0} value={r.renewal} onChange={(e) => setRules({ ...r, renewal: e.target.value })} /></div>
+          <div style={{ width: 200 }}><Field label="Quota (%)" type="number" min={0} max={100} step={0.5} value={r.sharePct} onChange={(e) => setRules({ ...r, sharePct: e.target.value })} /></div>
+          <div style={{ width: 200 }}><Field label="Valore di 1 punto (€)" type="number" min={0.01} step={0.01} value={r.pointValueEur} onChange={(e) => setRules({ ...r, pointValueEur: e.target.value })} /></div>
           <button className="btn">Salva</button>
         </div>
+        {s && <p style={{ fontSize: 14 }}>Con l’abbonamento annuale a €49,99 un professionista riceve <b>{s.rules.pointsPerSubscription} punti</b> per ogni cliente.</p>}
       </form>
       <form className="card stack" onSubmit={(e) => { e.preventDefault(); void run(() => api('POST', '/admin/rewards', { name: f.name, description: f.description || undefined, pointsRequired: Number(f.pointsRequired), stock: f.stock === '' ? null : Number(f.stock) })).then((ok) => ok && setF({ name: '', description: '', pointsRequired: '', stock: '' })); }}>
         <h3>Catalogo dei premi</h3>
@@ -212,6 +214,69 @@ export function RewardsAdmin() {
             </tbody>
           </table>
         ) : <div className="empty">Nessuna richiesta.</div>}
+      </div>
+    </div>
+  );
+}
+
+/** Pacchetti di abbonamenti richiesti dalle palestre: BTECH conferma il pagamento ricevuto e imposta prezzo e minimo. */
+export function PackagesAdmin() {
+  const state = useLoad<{ rules: { minSeats: number; unitPriceEur: number }; packages: any[] }>('/admin/packages');
+  const [rules, setRules] = useState<{ minSeats: string; unitPriceEur: string } | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [notice, setNotice] = useState('');
+  const s = state.data;
+  const r = rules ?? (s ? { minSeats: String(s.rules.minSeats), unitPriceEur: String(s.rules.unitPriceEur) } : { minSeats: '', unitPriceEur: '' });
+  const run = async (fn: () => Promise<unknown>, ok: string) => {
+    setError(null);
+    setNotice('');
+    try {
+      await fn();
+      setNotice(ok);
+      await state.reload();
+    } catch (e) {
+      setError(e);
+    }
+  };
+  const STATUS = { requested: 'In attesa di pagamento', paid: 'Pagato', cancelled: 'Annullato' } as const;
+  return (
+    <div className="stack">
+      <ErrorBox error={error ?? state.error} />
+      {notice && <div className="alert ok">{notice}</div>}
+      <form className="card stack" onSubmit={(e) => { e.preventDefault(); void run(() => api('PUT', '/admin/packages/rules', { minSeats: Number(r.minSeats), unitPriceEur: Number(r.unitPriceEur) }), 'Condizioni aggiornate'); }}>
+        <h3>Condizioni dei pacchetti</h3>
+        <p className="muted">Facoltativi: la palestra compra abbonamenti annuali in blocco per regalarli ai suoi iscritti. Prezzo pieno per l’utente: €49,99.</p>
+        <div className="row" style={{ alignItems: 'flex-end' }}>
+          <div style={{ width: 200 }}><Field label="Abbonamenti minimi" type="number" min={1} value={r.minSeats} onChange={(e) => setRules({ ...r, minSeats: e.target.value })} /></div>
+          <div style={{ width: 220 }}><Field label="Prezzo per abbonamento (€, IVA incl.)" type="number" min={0} step={0.01} value={r.unitPriceEur} onChange={(e) => setRules({ ...r, unitPriceEur: e.target.value })} /></div>
+          <button className="btn">Salva</button>
+        </div>
+      </form>
+      <div className="card">
+        {s?.packages.length ? (
+          <table>
+            <thead><tr><th>Palestra</th><th>Abbonamenti</th><th>Totale</th><th>Stato</th><th>Richiesto</th><th /></tr></thead>
+            <tbody>
+              {s.packages.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.structure}<div className="muted">{p.city}</div></td>
+                  <td>{p.seats} × €{p.unitPriceEur.toFixed(2).replace('.', ',')}</td>
+                  <td>€{p.totalEur.toFixed(2).replace('.', ',')}</td>
+                  <td><Badge status={p.status === 'paid' ? 'approved' : p.status === 'requested' ? 'pending' : 'rejected'} label={STATUS[p.status as keyof typeof STATUS]} /></td>
+                  <td className="muted">{date(p.createdAt)}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {p.status === 'requested' && (
+                      <div className="row" style={{ justifyContent: 'flex-end' }}>
+                        <button className="btn small" onClick={() => window.confirm(`Confermi di aver ricevuto €${p.totalEur.toFixed(2).replace('.', ',')} da ${p.structure}?`) && void run(() => api('POST', `/admin/packages/${p.id}/confirm`), 'Pagamento confermato: gli abbonamenti sono disponibili per la palestra')}>Pagamento ricevuto</button>
+                        <button className="btn danger small" onClick={() => void run(() => api('POST', `/admin/packages/${p.id}/cancel`), 'Richiesta annullata')}>Annulla</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <div className="empty">Nessun pacchetto richiesto.</div>}
       </div>
     </div>
   );
