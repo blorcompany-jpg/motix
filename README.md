@@ -1,6 +1,8 @@
 # MOTIX
 
-Piattaforma di **BTECH S.r.l.** che collega chi si allena, il personal trainer e la struttura sportiva.
+Piattaforma di **BTECH S.r.l.** che collega chi si allena, i professionisti (personal trainer, preparatori, fisioterapisti,
+nutrizionisti) e la struttura sportiva. **Per palestre e professionisti è gratuita con tutte le funzioni: paga solo l'utente finale
+(€49,99 all'anno, IVA inclusa).**
 La specifica completa è nel documento «MOTIX – Progetto dell'app»; l'identità visiva nella brand identity MOTIX.
 
 ## Cosa c'è nel repository
@@ -9,7 +11,7 @@ La specifica completa è nel documento «MOTIX – Progetto dell'app»; l'identi
 |---|---|---|
 | `apps/api` | Server: dati, accessi, ruoli, regole di business | Node.js, Fastify, Drizzle, PostgreSQL |
 | `apps/mobile` | App per chi si allena (iPhone e Android) | React Native, Expo |
-| `apps/web` | Dashboard della struttura, area personal trainer, pannello BTECH | React, Vite |
+| `apps/web` | Dashboard della struttura, area professionisti, pannello BTECH | React, Vite |
 | `services/ai` | Motore AI: analisi dei dati del sensore, adattamento settimanale del piano | Python, FastAPI, NumPy, SciPy |
 | `docs` | Proposta di protocollo Bluetooth del sensore motix pod | |
 | `packages/shared` | Regole, tipi, validazioni e brand condivisi da tutte le parti | TypeScript |
@@ -24,13 +26,48 @@ La specifica completa è nel documento «MOTIX – Progetto dell'app»; l'identi
 | 4. Area personal trainer e dashboard delle palestre (funzioni complete) | Fatta |
 | 5. Community, shop e punti | Fatta |
 | 6. Sensore e motore AI | Fatta (con sensore simulato: vedi sotto) |
+| 7. Professionisti e nutrizione (sul modello di CoachPlus, gratis per i professionisti) | Fatta |
 
 ### Provarlo online
 
-Per navigare app e sito da un link, con quattro accessi di esempio già pronti (BTECH, struttura, personal trainer, utente):
+Per navigare app e sito da un link, con cinque accessi di esempio già pronti (BTECH, struttura, personal trainer, nutrizionista, utente):
 [docs/ambiente-di-prova.md](docs/ambiente-di-prova.md).
 
 ## Cosa funziona oggi
+
+### Modello: gratis per palestre e professionisti, paga l'utente
+
+- **Prezzo**: €49,99 all'anno IVA inclusa, pagamento unico, dopo 14 giorni di prova. Si compra da App Store, Google Play
+  o dal sito (pagina `/abbonati`) allo stesso prezzo. Ogni abbonamento registra dove è stato pagato.
+- **Punti ai professionisti**: per ogni cliente che si abbona o rinnova, il professionista che lo segue riceve in punti il 20%
+  di quanto ha pagato (100 punti con il prezzo pieno; 1 punto = €0,10), da convertire in premi fisici e buoni regalo.
+  Quota e valore del punto si cambiano dal pannello BTECH.
+- **Pacchetti facoltativi per le palestre**: abbonamenti annuali comprati in blocco (default: da 10, a €39,99) da regalare
+  agli iscritti. Il pagamento oggi è fuori dall'app: BTECH lo conferma dal pannello e i posti diventano disponibili.
+- **Pagamenti tra cliente e professionista**: per ora fuori da MOTIX.
+
+### Professionisti (stile CoachPlus, ma gratis)
+
+- **Professione** scelta alla registrazione: personal trainer, preparatore atletico, fisioterapista/osteopata, nutrizionista/dietista.
+  Fisioterapisti e nutrizionisti indicano albo e numero di iscrizione, verificati da BTECH.
+- **Un professionista per area**: l'utente può avere un professionista per l'allenamento e un nutrizionista insieme.
+- **Template delle schede**: schede preimpostate riutilizzabili, assegnabili a un cliente da un giorno scelto; il piano di un
+  cliente si salva come template.
+- **Check-in periodici**: il professionista sceglie ogni quanto (7, 14, 30 giorni); il cliente invia peso, vita, cinque
+  sensazioni da 1 a 5, note e fino a 4 foto; il professionista risponde con un commento.
+- **Storico dei carichi** per esercizio (record, serie migliore, volume), per il cliente e per il professionista.
+- **App salute**: l'API riceve passi, sonno, battito e calorie da Apple Salute e Health Connect; il professionista li vede con il consenso.
+  Nell'app oggi i dati si inseriscono a mano: il collegamento nativo è da fare prima del lancio.
+- **Messaggi automatici** (spenti finché il professionista non li accende): benvenuto, promemoria del check-in, nessuna seduta
+  da 7 giorni, rischio abbandono alto. Il server li controlla ogni ora; ogni messaggio parte una volta sola.
+- **Vetrina dei professionisti** nell'app: ricerca per professione e città, profilo con video pubblici e strutture,
+  richiesta di essere seguiti. I professionisti con albo obbligatorio compaiono solo dopo la verifica.
+- **Nutrizione**: libreria di 57 alimenti con valori per 100 g (indicativi, da far rivedere a un nutrizionista) più quelli
+  aggiunti dal nutrizionista; piano alimentare con giorni, pasti, orari e fino a 3 alternative per pasto, calorie e macro
+  calcolati; diario alimentare dell'utente con l'obiettivo del piano. **Il piano alimentare lo crea solo il nutrizionista con
+  l'albo verificato** (in Italia la dieta personalizzata è riservata a biologi nutrizionisti, dietisti e medici).
+
+### Il resto
 
 - **Database** con tutte le entità della sezione 10 del documento (oltre 50 tabelle), già pronte anche per le tappe successive.
 - **Chi si allena** (app): registrazione in tre passi, codice della struttura e del personal trainer facoltativi, codice amico,

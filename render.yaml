@@ -16,7 +16,7 @@ services:
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
-      # Password dei quattro accessi di esempio: la scegli tu alla creazione (almeno 10 caratteri).
+      # Password dei cinque accessi di esempio: la scegli tu alla creazione (almeno 10 caratteri).
       - key: DEMO_PASSWORD
         sync: false
 

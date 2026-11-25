@@ -341,7 +341,7 @@ export function HBar({ label, value, max, suffix }: { label: string; value: numb
         <Text style={{ fontFamily: font.text, fontSize: 13, color: colors.nebbia }}>{value} {suffix}</Text>
       </Row>
       <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.blu }}>
-        <View style={{ height: 8, borderRadius: 4, width: `${Math.max(4, (value / Math.max(1, max)) * 100)}%`, backgroundColor: colors.acqua }} />
+        <View style={{ height: 8, borderRadius: 4, width: `${Math.min(100, Math.max(4, (value / Math.max(1, max)) * 100))}%`, backgroundColor: colors.acqua }} />
       </View>
     </View>
   );

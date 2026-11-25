@@ -251,7 +251,7 @@ export async function seedDemoProfessionals(app: FastifyInstance, ctx: AppCtx, p
     'PUT',
     `/trainer/clients/${nutriLink}/meal-plan`,
     {
-      title: 'Tonificazione · 1.800 kcal circa',
+      title: 'Tonificazione · giorno di allenamento',
       notes: 'Nei giorni di allenamento aggiungi una banana prima della seduta. Bevi almeno 2 litri d’acqua.',
       days: [
         {

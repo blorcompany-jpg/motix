@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { MUSCLE_LABELS, ROLE_LABELS, type HomeResponse } from '@motix/shared';
+import { MUSCLE_LABELS, ROLE_LABELS, type CheckInsResponse, type HomeResponse } from '@motix/shared';
 import { Body, Button, Card, ErrorBox, Eyebrow, H2, H3, Loading, Logo, Notice, Pill, Ring, Row, Screen, Small } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -16,6 +16,8 @@ export default function Home() {
   const day = today();
   const home = useApi<HomeResponse>(isUser ? `/me/home?day=${day}` : null);
   const unread = useApi<{ unread: number }>(isUser ? '/conversations/unread' : null);
+  const checkIns = useApi<CheckInsResponse>(isUser ? '/me/check-ins' : null);
+  const checkInDue = Boolean(checkIns.data?.nextDue && checkIns.data.nextDue <= day);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   if (!user) return null;
@@ -79,6 +81,15 @@ export default function Home() {
           )}
         </Pressable>
       </Row>
+      {checkInDue && (
+        <Pressable onPress={() => router.push('/check-in')} accessibilityRole="button" accessibilityLabel="Fai il check-in">
+          <Card style={{ borderColor: colors.energia }}>
+            <H3>È il momento del check-in</H3>
+            <Small style={{ color: colors.nebbia }}>Peso, sensazioni e qualche foto: il tuo professionista ti risponde qui.</Small>
+            <Small style={{ color: colors.acqua }}>Inizia ›</Small>
+          </Card>
+        </Pressable>
+      )}
       <ErrorBox error={error ?? home.error} />
       {!h && home.loading && <Loading />}
 

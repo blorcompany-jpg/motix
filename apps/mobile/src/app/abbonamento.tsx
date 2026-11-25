@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Linking, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { TRIAL_DAYS, type SubscriptionResponse } from '@motix/shared';
+import { PURCHASE_CHANNEL_LABELS, TRIAL_DAYS, euro, type SubscriptionResponse } from '@motix/shared';
 import { Body, Button, Card, ErrorBox, Eyebrow, H2, H3, Loading, Notice, Screen, Small, TopBar } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -10,11 +10,12 @@ import { colors, font } from '@/lib/theme';
 import { useApi } from '@/lib/useApi';
 
 const PREMIUM = [
-  'Piano personalizzato, con la spiegazione delle scelte',
+  'Piano del tuo professionista o dell’AI, con la spiegazione delle scelte',
+  'Piano alimentare del nutrizionista e diario alimentare',
+  'Check-in, chat con i professionisti e video nella community',
+  'Storico completo dei carichi e confronto tra le sedute',
   'Sensore motix pod e app salute',
-  'Storico completo e confronto tra le sedute',
   'Idratazione calcolata su peso e attività, con promemoria',
-  'Chat con il personal trainer e video nella community',
 ];
 
 export default function Abbonamento() {
@@ -23,7 +24,7 @@ export default function Abbonamento() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  const price = s ? `€${s.priceMonthlyEur.toFixed(2).replace('.', ',')}` : '';
+  const price = s ? euro(s.priceYearlyEur) : '';
 
   const act = async (path: string) => {
     setBusy(true);
@@ -62,8 +63,16 @@ export default function Abbonamento() {
           {s.status === 'active' && (
             <Card style={{ borderColor: colors.energia }}>
               <Eyebrow>Premium attivo</Eyebrow>
-              <H2>{s.installmentsPaid} rate pagate su {s.installmentsTotal}</H2>
-              {s.commitmentEndsAt && <Body style={{ fontSize: 14 }}>Impegno fino al {longDate(s.commitmentEndsAt)}. L’abbonamento si gestisce dallo store.</Body>}
+              {s.commitmentEndsAt && <H2>Fino al {longDate(s.commitmentEndsAt)}</H2>}
+              {s.channel && (
+                <Body style={{ fontSize: 14 }}>
+                  {s.channel === 'structure'
+                    ? 'Te lo ha regalato la tua palestra.'
+                    : s.channel === 'web'
+                      ? 'Acquistato dal sito MOTIX.'
+                      : `Acquistato da ${PURCHASE_CHANNEL_LABELS[s.channel]}: si gestisce dallo store.`}
+                </Body>
+              )}
             </Card>
           )}
           {!s.premium && (
@@ -74,16 +83,17 @@ export default function Abbonamento() {
           )}
 
           <Card>
-            <H3>Premium · {price} al mese</H3>
-            <Small style={{ color: colors.nebbia }}>IVA inclusa, impegno di {s.installmentsTotal} mesi con pagamento mensile.</Small>
+            <H3>Premium · {price} all’anno</H3>
+            <Small style={{ color: colors.nebbia }}>IVA inclusa, pagamento unico. Palestre e professionisti usano MOTIX gratis: paga solo chi si allena.</Small>
             <View style={{ gap: 6, marginTop: 4 }}>
               {PREMIUM.map((line) => <Body key={line} style={{ fontSize: 14, lineHeight: 20 }}>✓ {line}</Body>)}
             </View>
           </Card>
 
           <Notice>
-            L’abbonamento si attiverà da App Store e Google Play quando l’app sarà pubblicata. Fino ad allora nessuno può esserti addebitato nulla.
+            Potrai abbonarti dall’app, con App Store o Google Play, oppure dal sito MOTIX allo stesso prezzo. Gli acquisti si attivano quando l’app sarà pubblicata: fino ad allora nessuno può esserti addebitato nulla.
           </Notice>
+          {s.status !== 'active' && <Button title="Abbonati dal sito" variant="ghost" onPress={() => void Linking.openURL(s.webCheckoutUrl)} />}
 
           {s.status === 'trial' && !s.cancelled && !confirm && <Button title="Disdici la prova" variant="text" onPress={() => setConfirm(true)} />}
           {confirm && (

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { CONSENT_LABELS, ROLE_LABELS, type ConsentType } from '@motix/shared';
+import { CONSENT_LABELS, PROFESSION_LABELS, ROLE_LABELS, type ConsentType, type Profession } from '@motix/shared';
 import { Body, Button, Card, Checkbox, ErrorBox, Eyebrow, Field, H2, H3, Pill, Row, Screen, Small } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -13,6 +13,7 @@ interface TrainerLink {
   status: 'active' | 'requested_by_user' | 'requested_by_trainer';
   firstName: string;
   lastName: string;
+  profession: Profession;
 }
 
 const OPTIONAL_CONSENTS: ConsentType[] = ['share_structure', 'share_trainer', 'marketing'];
@@ -56,7 +57,7 @@ export default function Profilo() {
     }
   };
 
-  const active = links.find((l) => l.status === 'active');
+  const actives = links.filter((l) => l.status === 'active');
   const invites = links.filter((l) => l.status === 'requested_by_trainer');
   const requests = links.filter((l) => l.status === 'requested_by_user');
   const sub = user.subscription;
@@ -128,27 +129,32 @@ export default function Profilo() {
 
       {isUser && (
         <Card>
-          <H3>Il mio personal trainer</H3>
-          {active && (
-            <>
-              <Body style={{ color: colors.ghiaccio }}>{active.firstName} {active.lastName}</Body>
-              <Button
-                title="Scrivi al personal trainer"
-                variant="ghost"
-                loading={busy === 'chat'}
-                onPress={() =>
-                  run('chat', async () => {
-                    const c = await api<{ id: string }>('POST', '/conversations', { userId: active.trainerUserId });
-                    router.push(`/messaggi/${c.id}`);
-                  })
-                }
-              />
-              <Button title="Chiudi il collegamento" variant="text" inline loading={busy === active.id} onPress={() => run(active.id, () => api('POST', `/me/trainer-links/${active.id}/close`))} />
-            </>
-          )}
+          <H3>I miei professionisti</H3>
+          {actives.map((a) => (
+            <View key={a.id} style={{ gap: 4 }}>
+              <Body style={{ color: colors.ghiaccio }}>{a.firstName} {a.lastName}</Body>
+              <Small style={{ color: colors.nebbia }}>{PROFESSION_LABELS[a.profession]}</Small>
+              <Row style={{ gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    title="Scrivi"
+                    variant="ghost"
+                    loading={busy === `chat-${a.id}`}
+                    onPress={() =>
+                      run(`chat-${a.id}`, async () => {
+                        const c = await api<{ id: string }>('POST', '/conversations', { userId: a.trainerUserId });
+                        router.push(`/messaggi/${c.id}`);
+                      })
+                    }
+                  />
+                </View>
+                <View style={{ flex: 1 }}><Button title="Chiudi" variant="text" loading={busy === a.id} onPress={() => run(a.id, () => api('POST', `/me/trainer-links/${a.id}/close`))} /></View>
+              </Row>
+            </View>
+          ))}
           {invites.map((l) => (
             <View key={l.id} style={{ gap: 8 }}>
-              <Body>{l.firstName} {l.lastName} vuole seguirti come personal trainer.</Body>
+              <Body>{l.firstName} {l.lastName} ({PROFESSION_LABELS[l.profession].toLowerCase()}) vuole seguirti.</Body>
               <Row style={{ gap: 8 }}>
                 <View style={{ flex: 1 }}><Button title="Accetta" loading={busy === l.id} onPress={() => run(l.id, () => api('POST', `/me/trainer-links/${l.id}/accept`))} /></View>
                 <View style={{ flex: 1 }}><Button title="Rifiuta" variant="ghost" onPress={() => run(l.id, () => api('POST', `/me/trainer-links/${l.id}/decline`))} /></View>
@@ -158,19 +164,34 @@ export default function Profilo() {
           {requests.map((l) => (
             <Small key={l.id} style={{ color: colors.nebbia }}>Richiesta inviata a {l.firstName} {l.lastName}: in attesa di risposta.</Small>
           ))}
-          {!active && (
-            <>
-              <Small style={{ color: colors.nebbia }}>Hai un codice dal tuo personal trainer? Inseriscilo per collegarti.</Small>
-              <Field label="Codice del personal trainer" value={trainerCode} onChangeText={setTrainerCode} autoCapitalize="characters" autoCorrect={false} placeholder="PT…" />
-              <Button
-                title="Collega il personal trainer"
-                variant="ghost"
-                loading={busy === 'pt'}
-                disabled={trainerCode.trim().length < 4}
-                onPress={() => run('pt', () => api('POST', '/me/trainer-links', { code: trainerCode.trim() }).then((r) => (setTrainerCode(''), r)))}
-              />
-            </>
-          )}
+          {!actives.length && <Small style={{ color: colors.nebbia }}>Puoi avere un professionista per l’allenamento e un nutrizionista. Senza professionista il piano lo crea l’AI.</Small>}
+          <Button title="Trova un professionista" variant="ghost" onPress={() => router.push('/professionisti')} />
+          <Field label="Hai un codice di invito?" value={trainerCode} onChangeText={setTrainerCode} autoCapitalize="characters" autoCorrect={false} placeholder="PT…" />
+          <Button
+            title="Collegati con il codice"
+            variant="text"
+            inline
+            loading={busy === 'pt'}
+            disabled={trainerCode.trim().length < 4}
+            onPress={() => run('pt', () => api('POST', '/me/trainer-links', { code: trainerCode.trim() }).then((r) => (setTrainerCode(''), r)))}
+          />
+        </Card>
+      )}
+
+      {isUser && (
+        <Card>
+          <H3>Strumenti</H3>
+          {[
+            ['/check-in', 'Check-in', 'Peso, misure, foto e come ti senti, per il tuo professionista'],
+            ['/alimentazione', 'Alimentazione', 'Piano del nutrizionista e diario alimentare'],
+            ['/carichi', 'I miei carichi', 'Record e progressi esercizio per esercizio'],
+            ['/salute', 'App salute', 'Passi, sonno e battito da Apple Salute o Health Connect'],
+          ].map(([href, title, hint]) => (
+            <Pressable key={href} onPress={() => router.push(href as '/check-in')} accessibilityRole="button" accessibilityLabel={title} style={{ paddingVertical: 6 }}>
+              <Text style={{ fontFamily: font.textSemi, fontSize: 15, color: colors.ghiaccio }}>{title} ›</Text>
+              <Small style={{ color: colors.nebbia }}>{hint}</Small>
+            </Pressable>
+          ))}
         </Card>
       )}
 

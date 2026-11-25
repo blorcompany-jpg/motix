@@ -1,6 +1,6 @@
 # Ambiente di prova online
 
-Un solo indirizzo con dentro tutto: app (versione web), sito, API e motore AI, più quattro accessi di esempio.
+Un solo indirizzo con dentro tutto: app (versione web), sito, API e motore AI, più cinque accessi di esempio.
 Serve per navigare MOTIX e farlo vedere; non è la configurazione di produzione.
 
 | Indirizzo | Cosa c'è |
@@ -19,11 +19,15 @@ La password è la stessa per tutti: quella scelta alla creazione dell'ambiente (
 | Admin BTECH | `admin@motix.demo` | Sito |
 | Struttura affiliata (Fit Bari) | `struttura@motix.demo` | Sito |
 | Personal trainer (Luca Verdi) | `trainer@motix.demo` | Sito |
+| Nutrizionista (Sara Neri) | `nutrizionista@motix.demo` | Sito |
 | Utente finale (Giulia Rossi) | `utente@motix.demo` | App |
 
-Dati già presenti: Giulia è iscritta a Fit Bari, cliente di Luca, abbonata, con tre sedute fatte con il sensore, un piano
+Dati già presenti: Giulia è iscritta a Fit Bari, cliente di Luca e della nutrizionista Sara (piano alimentare e diario),
+con un check-in commentato, una settimana di dati salute, abbonata, con tre sedute fatte con il sensore, un piano
 alla seconda settimana, messaggi, post e misure. Altri due iscritti (uno attivo, uno a rischio abbandono) riempiono la
-dashboard. Nel registro ci sono tre sensori e una segnalazione di guasto aperta.
+dashboard. Nel registro ci sono tre sensori e una segnalazione di guasto aperta. Luca ha un template di scheda e i
+messaggi automatici accesi; Fit Bari ha un pacchetto di 10 abbonamenti pagato, uno già regalato a Paolo.
+Se l'ambiente era già stato creato prima, questi dati in più si aggiungono da soli al primo riavvio.
 
 Il sensore è simulato (`MP-SIM001`, già abbinato a Giulia): in una seduta scegli «Serie con il sensore» e l'app riceve i
 dati di una serie finta, analizzati dal motore AI vero.
@@ -34,7 +38,7 @@ dati di una serie finta, analizzati dal motore AI vero.
 2. Apri `https://render.com/deploy?repo=https://github.com/blorcompany-jpg/motix`
    (oppure, dal pannello di Render: **New → Blueprint** e scegli il repository).
 3. Render legge il file `render.yaml` e chiede un solo valore, `DEMO_PASSWORD`: scrivi la password che vuoi usare
-   per i quattro accessi (almeno 10 caratteri). Conferma.
+   per i cinque accessi (almeno 10 caratteri). Conferma.
 4. Aspetta la fine della prima costruzione (circa 10 minuti). L'indirizzo è quello del servizio `motix-prova`.
 
 Limiti del piano gratuito: il servizio si addormenta dopo un po' di inattività (la prima apertura richiede circa un

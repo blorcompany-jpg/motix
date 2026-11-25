@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { Redirect, router } from 'expo-router';
-import { PRICE_MONTHLY_EUR, TRIAL_DAYS, brand } from '@motix/shared';
+import { PRICE_YEARLY_EUR, TRIAL_DAYS, brand, euro } from '@motix/shared';
 import { Body, Button, Eyebrow, H1, Logo, Mark, Screen, Small } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 
@@ -16,7 +16,7 @@ export default function Welcome() {
           <Button title={`Inizia la prova gratuita di ${TRIAL_DAYS} giorni`} onPress={() => router.push('/register')} />
           <Button title="Ho già un account" variant="ghost" onPress={() => router.push('/login')} />
           <Small style={{ textAlign: 'center', marginTop: 4 }}>
-            Dopo la prova €{PRICE_MONTHLY_EUR.toFixed(2).replace('.', ',')} al mese per 12 mesi. Puoi disdire durante la prova.
+            Dopo la prova {euro(PRICE_YEARLY_EUR)} all’anno, IVA inclusa. Puoi disdire durante la prova.
           </Small>
         </>
       }
