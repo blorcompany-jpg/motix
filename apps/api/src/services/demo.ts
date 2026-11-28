@@ -5,7 +5,7 @@
  * Si attiva solo se è impostata DEMO_PASSWORD, che diventa la password dei quattro accessi.
  * NON va mai impostata in produzione. I dati sono creati passando dalle stesse chiamate che usano app e sito.
  */
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { simulatePodSet } from '@motix/shared';
 import type { AppCtx } from '../context';
@@ -313,6 +313,20 @@ export async function seedDemoProfessionals(app: FastifyInstance, ctx: AppCtx, p
   const [paolo] = await db.select({ id: users.id }).from(users).where(eq(users.email, 'paolo@motix.demo')).limit(1);
   if (paolo) await call('POST', '/structure/packages/assign', { userId: paolo.id }, ownerToken);
   return true;
+}
+
+/**
+ * Riallinea gli accessi di esempio alla password impostata su Render (DEMO_PASSWORD) e li riattiva.
+ * Serve se la password è stata cambiata dopo la prima creazione dei dati: altrimenti resterebbe quella vecchia.
+ */
+export async function syncDemoPasswords(ctx: AppCtx, password: string) {
+  const passwordHash = await hashPassword(password);
+  const rows = await ctx.db
+    .update(users)
+    .set({ passwordHash, status: 'active' })
+    .where(like(users.email, '%@motix.demo'))
+    .returning({ id: users.id });
+  return rows.length;
 }
 
 /** Pagina iniziale dell'ambiente di prova: i due ingressi e gli accessi di esempio. */

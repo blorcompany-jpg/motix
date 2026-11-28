@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { seedDemo, seedDemoProfessionals } from '../src/services/demo';
+import { seedDemo, seedDemoProfessionals, syncDemoPasswords } from '../src/services/demo';
 import { createEnv, type TestEnv } from './helpers';
 
 let env: TestEnv;
@@ -29,5 +29,13 @@ describe('dati dell’ambiente di prova', () => {
     expect((await env.api('GET', '/structure/packages', undefined, owner)).body.seatsAvailable).toBe(9);
     const nutri = await login('nutrizionista@motix.demo');
     expect((await env.api('GET', '/me', undefined, nutri)).body.trainer.canPrescribeNutrition).toBe(true);
+  });
+
+  it('se DEMO_PASSWORD cambia, al riavvio tutti gli accessi di esempio usano la nuova password', async () => {
+    expect(await syncDemoPasswords(env.app.ctx, 'Nuova-password-2')).toBeGreaterThanOrEqual(5);
+    for (const email of ['admin@motix.demo', 'struttura@motix.demo', 'trainer@motix.demo', 'nutrizionista@motix.demo', 'utente@motix.demo']) {
+      expect((await env.api('POST', '/auth/login', { email, password: 'Nuova-password-2' })).status, email).toBe(200);
+      expect((await env.api('POST', '/auth/login', { email, password: PASSWORD })).status, email).toBe(401);
+    }
   });
 });

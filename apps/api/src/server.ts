@@ -5,7 +5,7 @@ import { openDb } from './db/client';
 import { createAiClient } from './lib/ai';
 import { DevMailer } from './lib/mailer';
 import { LocalStorage } from './lib/storage';
-import { demoHome, seedDemo, seedDemoProfessionals } from './services/demo';
+import { demoHome, seedDemo, seedDemoProfessionals, syncDemoPasswords } from './services/demo';
 import { runAutomations } from './services/automations';
 import { ensureExerciseLibrary, ensureFoodLibrary, ensureShopCatalog } from './services/library';
 
@@ -51,6 +51,11 @@ if (config.demoPassword) {
     return false;
   });
   if (extra) app.log.info('Dati di esempio dei professionisti creati');
+  const synced = await syncDemoPasswords(ctx, config.demoPassword).catch((e) => {
+    app.log.error(e);
+    return 0;
+  });
+  app.log.info(`Accessi di esempio allineati alla password di DEMO_PASSWORD: ${synced}`);
 }
 
 // Messaggi automatici dei professionisti: controllo ogni ora. Ogni messaggio parte una volta sola.
